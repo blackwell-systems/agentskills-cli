@@ -1,0 +1,1094 @@
+title: Enhance agentskills upgrade to SAW-quality progressive disclosure
+feature_slug: agentskills-progressive-disclosure
+verdict: SUITABLE
+suitability_assessment: |
+    Five-question suitability gate:
+
+    1. File decomposition: YES. Work decomposes into 8-10 files (4 new modules, 5 modified files)
+       with disjoint ownership across 2 waves. New files: pattern_detector.rs, semantic_analyzer.rs,
+       routing_graph.rs, frontmatter_gen.rs. Modified: analyzer.rs, splitter.rs, generator.rs,
+       upgrade.rs, models.rs.
+
+    2. Investigation: NO blockers. SAW reference implementation exists and is well-documented.
+       Pattern extraction from YAML frontmatter is deterministic. Claude API integration
+       is straightforward.
+
+    3. Interface discoverability: YES. All cross-agent interfaces can be defined now:
+       - PatternDetector::extract_subcommands/extract_agent_types
+       - SemanticAnalyzer::analyze_section
+       - RoutingGraph::build
+       - FrontmatterGen::generate
+       - ScriptBundler::bundle_saw_script
+
+    4. Pre-implementation status: ~20% complete. Mechanical splitter exists but lacks
+       SAW-level intelligence (pattern detection, semantic analysis, routing graph,
+       conditional injection).
+
+    5. Parallelization value: Moderate. Fast Rust compile (~1s) reduces speed benefit,
+       but coordination value is high. IMPL doc prevents "forgot to wire X into Y"
+       integration failures when adding 4 new modules to existing upgrade pipeline.
+
+    Estimated times:
+    - Scout phase: ~8 min (dependency mapping, interface contracts, IMPL doc)
+    - Agent execution: ~15 min (6 agents × 2.5 min avg, 2 waves with parallelism)
+    - Merge & verification: ~4 min
+    Total SAW time: ~27 min
+
+    Sequential baseline: ~35 min (6 agents × 6 min avg sequential time)
+    Time savings: ~8 min (23% faster)
+
+    Recommendation: Clear speedup + coordination benefit. The IMPL doc provides audit trail
+    for integrating multiple new modules with existing upgrade pipeline.
+test_command: cargo test
+lint_command: cargo clippy -- -D warnings
+file_ownership:
+    - file: src/upgrade/pattern_detector.rs
+      agent: A
+      wave: 1
+      action: new
+    - file: src/upgrade/semantic_analyzer.rs
+      agent: B
+      wave: 1
+      action: new
+    - file: src/upgrade/routing_graph.rs
+      agent: C
+      wave: 1
+      action: new
+    - file: src/upgrade/frontmatter_gen.rs
+      agent: D
+      wave: 1
+      action: new
+    - file: src/error.rs
+      agent: B
+      wave: 1
+      action: modify
+    - file: src/upgrade/analyzer.rs
+      agent: E
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+    - file: src/upgrade/splitter.rs
+      agent: F
+      wave: 3
+      action: modify
+      depends_on:
+        - B
+        - D
+        - E
+    - file: src/upgrade/generator.rs
+      agent: G
+      wave: 3
+      action: modify
+      depends_on:
+        - D
+    - file: src/commands/upgrade.rs
+      agent: H
+      wave: 4
+      action: modify
+      depends_on:
+        - E
+        - C
+        - F
+    - file: src/models.rs
+      agent: C
+      wave: 1
+      action: modify
+    - file: src/commands/upgrade.rs
+      agent: C
+      wave: 1
+      action: modify
+      note: "Agent C fixes UpgradeOptions construction for backward compatibility. Agent H (Wave 4) will further modify to add --interactive flag parsing."
+    - file: src/upgrade/mod.rs
+      agent: E
+      wave: 2
+      action: modify
+      depends_on:
+        - A
+    - file: Cargo.toml
+      agent: B
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: PatternDetector::extract_subcommands
+      description: Extract subcommand names from argument-hint field
+      definition: |
+        pub fn extract_subcommands(content: &str) -> Result<Vec<String>, Error>
+
+        Parses YAML frontmatter, extracts `argument-hint:` field, and returns list of
+        subcommands (e.g., ["scout", "wave", "status", "bootstrap", "interview"] from
+        "/saw [scout|wave|status] ...").
+
+        Returns Vec<String> of normalized subcommand names (lowercase, no delimiters).
+      location: src/upgrade/pattern_detector.rs
+    - name: PatternDetector::extract_agent_types
+      description: Extract agent types from allowed-tools Agent() calls
+      definition: |
+        pub fn extract_agent_types(content: &str) -> Result<Vec<String>, Error>
+
+        Parses `allowed-tools:` field and extracts `subagent_type` values from
+        `Agent(subagent_type=X)` patterns. Returns Vec<String> of agent type names
+        (e.g., ["scout", "wave-agent", "integration-agent"]).
+      location: src/upgrade/pattern_detector.rs
+    - name: SemanticAnalyzer::analyze_section
+      description: Use Claude API to determine section routing intent
+      definition: |
+        pub struct SectionIntent {
+            pub is_command_specific: bool,
+            pub command: Option<String>,
+            pub is_agent_specific: bool,
+            pub agent_type: Option<String>,
+            pub is_conditional: bool,
+            pub condition_pattern: Option<String>,
+            pub reasoning: String,
+        }
+
+        pub async fn analyze_section(
+            &self,
+            section_header: &str,
+            section_content: &str
+        ) -> Result<SectionIntent, Error>
+
+        Sends section to Claude API with prompt: "This is a section from an Agent Skill.
+        Determine if it is: (1) command-specific (used for one subcommand), (2) agent-specific
+        (used by one agent type), (3) conditional (only loaded when prompt matches pattern),
+        or (4) always-loaded. Respond with structured JSON."
+
+        Returns SectionIntent with routing classification and reasoning.
+      location: src/upgrade/semantic_analyzer.rs
+    - name: RoutingGraph::build
+      description: Build routing graph from patterns and semantic analysis
+      definition: |
+        pub struct RoutingNode {
+            pub reference_file: String,
+            pub trigger_patterns: Vec<String>,
+            pub agent_types: Vec<String>,
+            pub condition_pattern: Option<String>,
+        }
+
+        pub struct RoutingGraph {
+            pub nodes: Vec<RoutingNode>,
+        }
+
+        pub fn build(
+            subcommands: &[String],
+            agent_types: &[String],
+            sections: &[(String, String, SectionIntent)]
+        ) -> RoutingGraph
+
+        Builds routing graph from pattern detector output and semantic analysis results.
+        Maps each reference file to:
+        - Trigger patterns (from subcommands or section headers)
+        - Agent types (from extract_agent_types or semantic analysis)
+        - Conditional pattern (from semantic analysis)
+      location: src/upgrade/routing_graph.rs
+    - name: FrontmatterGen::generate_triggers
+      description: Generate triggers YAML from routing graph
+      definition: |
+        pub fn generate_triggers(graph: &RoutingGraph) -> String
+
+        Generates YAML for triggers: field from routing graph nodes.
+        Each node with trigger_patterns becomes a trigger entry with optional inject: path.
+        Returns YAML string with proper indentation.
+      location: src/upgrade/frontmatter_gen.rs
+    - name: FrontmatterGen::generate_agent_references
+      description: Generate agent-references YAML from routing graph
+      definition: |
+        pub fn generate_agent_references(graph: &RoutingGraph) -> String
+
+        Generates YAML for agent-references: field from routing graph nodes.
+        Each node with agent_types becomes an agent-references entry with:
+        - agent-type: <type>
+          inject: references/<file>.md
+          when: <pattern> (optional, from condition_pattern)
+
+        Returns YAML string with proper indentation.
+      location: src/upgrade/frontmatter_gen.rs
+    - name: ScriptBundler::bundle_saw_script
+      description: Copy SAW inject-agent-context script to target skill
+      definition: |
+        pub fn bundle_saw_script(target_scripts_dir: &Path) -> Result<(), Error>
+
+        Copies /Users/dayna.blackwell/code/scout-and-wave/implementations/claude-code/prompts/scripts/inject-agent-context
+        to target_scripts_dir/inject-agent-context. Preserves shebang and executable permissions.
+
+        Returns Ok(()) on success, Error on IO failure.
+      location: src/upgrade/generator.rs
+    - name: APIKeyThreading
+      description: API key flow from environment to SemanticAnalyzer
+      definition: |
+        ANTHROPIC_API_KEY environment variable threading:
+
+        1. Agent E (Wave 3) in upgrade_skill function reads env var:
+           ```rust
+           let api_key = std::env::var("ANTHROPIC_API_KEY").ok();
+           ```
+
+        2. Agent E passes api_key to split_content (after Agent F changes signature in Wave 2):
+           ```rust
+           let split_result = splitter::split_content(skill_path, &analysis, api_key).await?;
+           ```
+
+        3. Agent F (Wave 2) receives api_key in split_content signature:
+           ```rust
+           pub async fn split_content(
+               skill_path: &Path,
+               analysis: &BloatAnalysis,
+               api_key: Option<String>,
+           ) -> Result<SplitResult, Error>
+           ```
+
+        4. Agent F creates SemanticAnalyzer if api_key.is_some():
+           ```rust
+           let analyzer = SemanticAnalyzer::new(api_key.unwrap());
+           ```
+
+        5. Agent B (Wave 1) SemanticAnalyzer uses api_key for Claude API calls
+
+        This contract ensures all agents coordinate on the same API key flow.
+      location: cross-agent coordination
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            # Pattern Detector Module
+
+            Create `src/upgrade/pattern_detector.rs` with two pattern extraction functions.
+
+            ## What to implement
+
+            ## What to implement
+
+            1. `extract_subcommands(content: &str) -> Result<Vec<String>, Error>`
+               - Parse YAML frontmatter using serde_yaml
+               - Extract `argument-hint:` field value
+               - Use regex to detect subcommand names in patterns like:
+                 - `[scout|wave|status]`
+                 - `(bootstrap <name> | scout <feature> | wave)`
+               - Return Vec<String> of normalized names (lowercase, trimmed)
+
+            2. `extract_agent_types(content: &str) -> Result<Vec<String>, Error>`
+               - Parse YAML frontmatter using serde_yaml
+               - Extract `allowed-tools:` field value (pipe-delimited string or array)
+               - Use regex to extract `subagent_type=X` from `Agent(subagent_type=X)` patterns
+               - Return Vec<String> of agent type names
+
+            ## Interface contracts
+
+            Both functions take raw skill content (entire SKILL.md) and return Vec<String>.
+            Error handling: return Error::ParseError if frontmatter missing or malformed.
+
+            ## Tests
+
+            Create test module with:
+            - `test_extract_subcommands_basic` — parse "[scout|wave|status]"
+            - `test_extract_subcommands_complex` — parse "(bootstrap <name> | scout <feature> | wave [--auto])"
+            - `test_extract_agent_types` — parse "Agent(subagent_type=scout), Agent(subagent_type=wave-agent)"
+            - `test_extract_agent_types_multiline` — parse multi-line allowed-tools
+            - `test_missing_frontmatter` — return Error::ParseError
+
+            ## Verification gate
+
+            ```bash
+            cargo build
+            cargo clippy -- -D warnings
+            cargo test pattern_detector
+            ```
+
+            ## Constraints
+
+            - Use existing `Error` type from `crate::models::Error`
+            - Add `#[cfg(test)]` module at bottom of file
+            - Follow existing code style (same as analyzer.rs, splitter.rs)
+            - Agent E (Wave 3) will add module exports after Wave 1 merge
+          files:
+            - src/upgrade/pattern_detector.rs
+        - id: B
+          task: |
+            # Semantic Analyzer Module
+
+            Create `src/upgrade/semantic_analyzer.rs` with Claude API integration for semantic analysis.
+
+            ## What to implement
+
+            NOTE: Agent E (Wave 3) adds module exports after Wave 1 merge. You do NOT modify
+            mod.rs - just create semantic_analyzer.rs and update Cargo.toml/error.rs.
+
+            1. Add `anthropic-sdk` dependency to Cargo.toml:
+               ```toml
+               anthropic-sdk = "0.1.5"
+               tokio = { version = "1.0", features = ["full"] }
+               ```
+
+               **IMPORTANT**: Verify anthropic-sdk API before implementation. Check docs at https://docs.rs/anthropic-sdk/0.1.5 to confirm:
+               - Client type exists and is importable
+               - API accepts claude-3-haiku model name
+               - Message API structure for JSON responses
+               If API differs from brief expectations, adapt implementation accordingly.
+
+            2. Define `SectionIntent` struct:
+               ```rust
+               pub struct SectionIntent {
+                   pub is_command_specific: bool,
+                   pub command: Option<String>,
+                   pub is_agent_specific: bool,
+                   pub agent_type: Option<String>,
+                   pub is_conditional: bool,
+                   pub condition_pattern: Option<String>,
+                   pub reasoning: String,
+               }
+               ```
+
+            3. Implement `SemanticAnalyzer` struct:
+               ```rust
+               pub struct SemanticAnalyzer {
+                   client: anthropic_sdk::Client,
+               }
+
+               impl SemanticAnalyzer {
+                   pub fn new(api_key: String) -> Self { ... }
+
+                   pub async fn analyze_section(
+                       &self,
+                       section_header: &str,
+                       section_content: &str
+                   ) -> Result<SectionIntent, Error> { ... }
+               }
+               ```
+
+            4. In `analyze_section`:
+               - Construct prompt: "This is a section from an Agent Skill. Section header: {section_header}. Section content: {truncated_content}. Determine if it is: (1) command-specific (e.g., only for /scout command), (2) agent-specific (e.g., only for wave-agent), (3) conditional (only loaded when prompt matches pattern), or (4) always-loaded. Respond with JSON: {is_command_specific, command, is_agent_specific, agent_type, is_conditional, condition_pattern, reasoning}."
+               - Call Claude API (use `claude-3-haiku` model for cost efficiency)
+               - Parse JSON response into SectionIntent
+               - Handle API errors (rate limits, auth failures) by returning Error::ApiError
+
+            ## Interface contracts
+
+            `analyze_section` is async and returns Result<SectionIntent, Error>. The function
+            is called by Wave 2 agents during splitting/routing analysis.
+
+            ## Tests
+
+            Create test module with:
+            - `test_semantic_analyzer_new` — verify constructor
+            - Mock tests (using `#[cfg(test)]` feature flag to skip API calls in tests):
+              - `test_analyze_section_command_specific` — mock response for command-specific section
+              - `test_analyze_section_agent_specific` — mock response for agent-specific section
+              - `test_analyze_section_always_loaded` — mock response for always-loaded section
+
+            Note: Add `#[ignore]` attribute to tests requiring live API key. Document in
+            test comments that live API tests require ANTHROPIC_API_KEY env var.
+
+            ## Verification gate
+
+            ```bash
+            cargo build
+            cargo clippy -- -D warnings
+            cargo test semantic_analyzer
+            ```
+
+            ## Constraints
+
+            - Use existing `Error` type from `crate::models::Error`
+            - Add `Error::ApiError(String)` variant to `src/error.rs`:
+              ```rust
+              #[error("API error: {0}")]
+              ApiError(String),
+              ```
+              NOTE: This is a NEW error variant. If Error uses thiserror with exhaustive matching,
+              other agents' match statements may need wildcard `_ =>` arms or explicit ApiError handling.
+              This is only used by semantic_analyzer.rs, so impact is minimal if Error uses #[non_exhaustive].
+            - Truncate section content to 500 chars in prompt (Claude API has token limits)
+            - Use `#[cfg(test)]` module at bottom of file
+          files:
+            - src/upgrade/semantic_analyzer.rs
+            - Cargo.toml
+            - src/error.rs
+        - id: C
+          task: |
+            # Routing Graph Module
+
+            Create `src/upgrade/routing_graph.rs` with routing graph builder and data structures.
+
+            ## What to implement
+
+            NOTE: Agent E (Wave 3) adds module exports after Wave 1 merge. You do NOT modify
+            mod.rs - just create routing_graph.rs and update models.rs.
+
+            1. Define routing graph structs in `src/models.rs`:
+               ```rust
+               #[derive(Debug, Clone, Serialize, Deserialize)]
+               pub struct RoutingNode {
+                   pub reference_file: String,
+                   pub trigger_patterns: Vec<String>,
+                   pub agent_types: Vec<String>,
+                   pub condition_pattern: Option<String>,
+               }
+
+               #[derive(Debug, Clone)]
+               pub struct RoutingGraph {
+                   pub nodes: Vec<RoutingNode>,
+               }
+               ```
+
+            2. Add `interactive` field to EXISTING UpgradeOptions struct in `src/models.rs`:
+
+               Find the existing UpgradeOptions struct (around line 91-94) and add the new field:
+               ```rust
+               pub struct UpgradeOptions {
+                   pub dry_run: bool,
+                   pub with_agent_references: bool,
+                   pub interactive: bool,  // NEW FIELD - add this line
+               }
+               ```
+
+               CRITICAL: The struct already exists with dry_run and with_agent_references.
+               You must ADD the interactive field as the third field. Agent H (Wave 4) depends
+               on this field existing.
+
+            3. Implement `RoutingGraph::build` in `src/upgrade/routing_graph.rs`:
+               ```rust
+               use crate::models::{RoutingGraph, RoutingNode};
+               use crate::upgrade::semantic_analyzer::SectionIntent;
+
+               pub fn build(
+                   subcommands: &[String],
+                   agent_types: &[String],
+                   sections: &[(String, String, SectionIntent)]
+               ) -> RoutingGraph {
+                   let mut nodes = Vec::new();
+
+                   for (ref_file, section_header, intent) in sections {
+                       let trigger_patterns = if intent.is_command_specific {
+                           vec![format!("^/saw {}", intent.command.as_ref().unwrap())]
+                       } else {
+                           vec![]
+                       };
+
+                       let agent_types_for_node = if intent.is_agent_specific {
+                           vec![intent.agent_type.as_ref().unwrap().clone()]
+                       } else {
+                           vec![]
+                       };
+
+                       let condition_pattern = if intent.is_conditional {
+                           intent.condition_pattern.clone()
+                       } else {
+                           None
+                       };
+
+                       nodes.push(RoutingNode {
+                           reference_file: ref_file.clone(),
+                           trigger_patterns,
+                           agent_types: agent_types_for_node,
+                           condition_pattern,
+                       });
+                   }
+
+                   RoutingGraph { nodes }
+               }
+               ```
+
+            ## Interface contracts
+
+            `build` function takes:
+            - `subcommands`: Vec<String> from PatternDetector::extract_subcommands
+            - `agent_types`: Vec<String> from PatternDetector::extract_agent_types
+            - `sections`: Vec<(ref_file, section_header, intent)> from semantic analysis
+
+            Returns RoutingGraph with nodes array. Each node maps one reference file
+            to its routing metadata (triggers, agent_types, condition_pattern).
+
+            ## Tests
+
+            Create test module with:
+            - `test_build_command_specific_node` — verify trigger_patterns for command-specific intent
+            - `test_build_agent_specific_node` — verify agent_types for agent-specific intent
+            - `test_build_conditional_node` — verify condition_pattern for conditional intent
+            - `test_build_always_loaded_node` — verify empty triggers/agent_types for always-loaded
+
+            ## Verification gate
+
+            ```bash
+            cargo build
+            cargo clippy -- -D warnings
+            cargo test routing_graph
+            ```
+
+            ## Constraints
+
+            - Add structs to `src/models.rs` (existing file)
+            - Create `src/upgrade/routing_graph.rs` as new file
+            - Use existing `Error` type (no new error variants needed)
+          files:
+            - src/upgrade/routing_graph.rs
+            - src/models.rs
+        - id: D
+          task: |
+            # Frontmatter Generator Module
+
+            Create `src/upgrade/frontmatter_gen.rs` with YAML frontmatter generation functions.
+
+            ## What to implement
+
+            NOTE: Agent E (Wave 3) adds module exports after Wave 1 merge. You do NOT modify
+            mod.rs - just create frontmatter_gen.rs.
+
+            1. `generate_triggers(graph: &RoutingGraph) -> String`
+               - Iterate over graph.nodes
+               - For each node with non-empty trigger_patterns, emit YAML:
+                 ```yaml
+                 triggers:
+                   - match: "<pattern>"
+                     inject: references/<reference_file>
+                 ```
+               - Return complete YAML string with proper indentation (2 spaces)
+
+            2. `generate_agent_references(graph: &RoutingGraph) -> String`
+               - Iterate over graph.nodes
+               - For each node with non-empty agent_types, emit YAML:
+                 ```yaml
+                 agent-references:
+                   - agent-type: <type>
+                     inject: references/<reference_file>
+                     when: "<condition_pattern>"  # optional
+                 ```
+               - Return complete YAML string with proper indentation (2 spaces)
+
+            ## Interface contracts
+
+            Both functions take `&RoutingGraph` and return String (YAML-formatted).
+            The strings are inserted into SKILL.md frontmatter by Wave 2 splitter agent.
+
+            ## Tests
+
+            Create test module with:
+            - `test_generate_triggers_single_node` — verify single trigger entry
+            - `test_generate_triggers_multiple_nodes` — verify multiple trigger entries
+            - `test_generate_agent_references_single_node` — verify single agent-references entry
+            - `test_generate_agent_references_with_when` — verify when: field generation
+            - `test_generate_agent_references_multiple_agents` — verify multiple entries for same ref file
+
+            ## Verification gate
+
+            ```bash
+            cargo build
+            cargo clippy -- -D warnings
+            cargo test frontmatter_gen
+            ```
+
+            ## Constraints
+
+            - Use existing `RoutingGraph` and `RoutingNode` types from models.rs
+            - Follow SAW skill YAML format exactly (see /Users/dayna.blackwell/code/scout-and-wave/implementations/claude-code/prompts/SKILL.md lines 1-59)
+            - Use `#[cfg(test)]` module at bottom of file
+          files:
+            - src/upgrade/frontmatter_gen.rs
+      base_commit: 37788515b21b29b5e6f7a9b73d8252ecd4930770
+    - number: 2
+      agents:
+        - id: E
+          task: |
+            # Enhance Analyzer Module
+
+            Modify `src/upgrade/analyzer.rs` to integrate pattern detection and update `src/upgrade/mod.rs`.
+
+            ## What to implement
+
+            1. In `src/upgrade/analyzer.rs`:
+               - Import `crate::upgrade::pattern_detector` at top of file
+
+               - In `analyze_bloat` function, after parsing metadata:
+                 ```rust
+                 // Extract patterns for routing
+                 let subcommands = pattern_detector::extract_subcommands(&content)
+                     .unwrap_or_else(|_| vec![]);
+                 let agent_types = pattern_detector::extract_agent_types(&content)
+                     .unwrap_or_else(|_| vec![]);
+                 ```
+               - Modify `BloatAnalysis` struct to add NEW fields:
+                 ```rust
+                 pub struct BloatAnalysis {
+                     pub total_lines: usize,
+                     pub suggested_splits: Vec<SplitSuggestion>,
+                     pub trigger_patterns: Vec<String>,
+                     pub needs_agent_references: bool,
+                     pub subcommands: Vec<String>,  // NEW
+                     pub agent_types: Vec<String>,  // NEW
+                 }
+                 ```
+               - Update ALL BloatAnalysis construction sites ACROSS THE CODEBASE:
+                 - In analyze_bloat function return statement (line ~122-127)
+                 - In ALL tests that construct BloatAnalysis (12 test instances in analyzer.rs)
+                 - In splitter.rs tests: 4 sites at lines 193, 226, 253, 283
+                 - In mod.rs tests (if any exist)
+                 - Add empty vec![] for subcommands and agent_types in ALL test instances
+
+               CRITICAL: BloatAnalysis is used across multiple files. Grep for "BloatAnalysis {"
+               to find all construction sites before committing.
+
+            2. In `src/upgrade/mod.rs`:
+               - Add ALL 4 Wave 1 module declarations:
+                 ```rust
+                 pub mod pattern_detector;
+                 pub mod semantic_analyzer;
+                 pub mod routing_graph;
+                 pub mod frontmatter_gen;
+                 ```
+                 These files were created by Wave 1 agents and merged to main. You are adding
+                 exports in Wave 2 when all files exist.
+
+               - Add `pub use pattern_detector::{extract_subcommands, extract_agent_types};` to pub use section
+               - In `upgrade_skill` function, read API key from environment:
+                 ```rust
+                 let api_key = std::env::var("ANTHROPIC_API_KEY").ok();
+                 ```
+               - Update `split_content` call (line 33) to pass api_key:
+                 ```rust
+                 let split_result = splitter::split_content(skill_path, &analysis, api_key).await?;
+                 ```
+
+                 COORDINATION NOTE: Agent F (Wave 3) will change split_content signature to add
+                 api_key parameter. You are adding the call site now in Wave 2 with the correct
+                 signature. When Agent F updates the function definition in Wave 3, both sides
+                 will match.
+
+               - Mark `upgrade_skill` as async:
+                 ```rust
+                 pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Result<(), Error>
+                 ```
+
+               COORDINATION NOTE: upgrade_skill is called from src/commands/upgrade.rs (Agent H, Wave 4).
+               Agent H will update the caller to await this function. You just need to mark it async.
+
+            ## Interface contracts
+
+            BloatAnalysis now includes subcommands and agent_types fields. These are passed
+            to Wave 3 splitter and generator agents for routing graph construction.
+
+            ## Tests
+
+            Update existing tests in analyzer.rs:
+            - `test_analyze_bloat_generates_triggers` — verify subcommands field populated
+            - Add `test_analyze_bloat_extracts_patterns` — verify subcommands and agent_types extraction
+
+            ## Verification gate
+
+            ```bash
+            cargo build
+            cargo clippy -- -D warnings
+            cargo test analyzer
+            ```
+
+            ## Constraints
+
+            - Preserve existing analyze_bloat logic (section detection, split suggestions)
+            - Add new fields without breaking existing tests
+            - Follow existing code style
+          files:
+            - src/upgrade/analyzer.rs
+            - src/upgrade/mod.rs
+          dependencies:
+            - A
+    - number: 3
+      agents:
+        - id: F
+          task: |
+            # Enhance Splitter Module
+
+            Modify `src/upgrade/splitter.rs` to integrate semantic analysis and frontmatter generation.
+
+            ## What to implement
+
+            1. Import dependencies:
+               ```rust
+               use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
+               use crate::upgrade::routing_graph::RoutingGraph;
+               use crate::upgrade::frontmatter_gen;
+               ```
+
+            2. Modify `split_content` function signature to add api_key parameter:
+               ```rust
+               pub async fn split_content(
+                   skill_path: &Path,
+                   analysis: &BloatAnalysis,
+                   api_key: Option<String>,  // NEW PARAMETER
+               ) -> Result<SplitResult, Error>
+               ```
+
+               COORDINATION NOTE: Agent E (Wave 2) already updated the caller in mod.rs to pass
+               api_key. You are updating the function definition now in Wave 3. The signature
+               already matches from E's work.
+
+            3. After extracting sections from suggested_splits, if api_key.is_some():
+               - Create SemanticAnalyzer instance
+               - For each section in suggested_splits, call analyzer.analyze_section
+               - Build routing graph using routing_graph::build
+               - Generate frontmatter using frontmatter_gen::generate_triggers and generate_agent_references
+               - Insert generated frontmatter into core_content (replace old triggers_yaml)
+
+            4. If api_key.is_none(), fall back to existing mechanical triggers generation
+
+            ## Interface contracts
+
+            `split_content` now returns SplitResult with frontmatter containing both triggers:
+            and agent-references: fields (when API key provided). Existing behavior preserved
+            when API key absent.
+
+            ## Tests
+
+            Update existing tests:
+            - Mark tests as async where semantic analysis used
+            - Add `#[ignore]` to tests requiring API key
+            - Add `test_split_content_with_routing_graph` — verify frontmatter generation
+
+            ## Verification gate
+
+            ```bash
+            cargo build
+            cargo clippy -- -D warnings
+            cargo test splitter
+            ```
+
+            ## Constraints
+
+            - Preserve backward compatibility (no API key = mechanical splitter)
+            - Use existing SplitResult struct
+            - Follow existing error handling patterns
+          files:
+            - src/upgrade/splitter.rs
+          dependencies:
+            - B
+            - D
+            - E
+        - id: G
+          task: |
+            # Enhance Generator Module
+
+            Modify `src/upgrade/generator.rs` to bundle SAW inject-agent-context script.
+
+            ## What to implement
+
+            1. Replace `generate_inject_script` function (lines 5-51) with:
+               ```rust
+               pub fn generate_inject_script(
+                   _skill_path: &Path,
+                   _reference_files: &[String],
+               ) -> Result<String, Error> {
+                   bundle_saw_script()
+               }
+
+               fn bundle_saw_script() -> Result<String, Error> {
+                   let saw_script_path = Path::new("/Users/dayna.blackwell/code/scout-and-wave/implementations/claude-code/prompts/scripts/inject-agent-context");
+
+                   if !saw_script_path.exists() {
+                       return Err(Error::IoError(
+                           format!("SAW inject-agent-context script not found at {:?}", saw_script_path)
+                       ));
+                   }
+
+                   let script_content = fs::read_to_string(saw_script_path)
+                       .map_err(|e| Error::IoError(format!("Failed to read SAW script: {}", e)))?;
+
+                   Ok(script_content)
+               }
+               ```
+
+            2. Update docstring for `generate_inject_script` to explain it bundles SAW script
+
+            ## Interface contracts
+
+            `generate_inject_script` signature unchanged (maintains backward compatibility).
+            Returns bundled SAW script instead of generating simple script.
+
+            ## Tests
+
+            Update existing tests:
+            - `test_generate_inject_script_creates_valid_bash` — verify script still has shebang
+            - `test_generate_inject_script_handles_skill_dir` — verify SKILL_DIR detection
+            - Add `test_bundle_saw_script` — verify SAW script path resolution
+
+            ## Verification gate
+
+            ```bash
+            cargo build
+            cargo clippy -- -D warnings
+            cargo test generator
+            ```
+
+            ## Constraints
+
+            - Maintain existing function signature (backward compatibility)
+            - Hardcoded path to SAW script is acceptable (this tool is in same repo ecosystem)
+            - Follow existing error handling patterns
+          files:
+            - src/upgrade/generator.rs
+          dependencies:
+            - D
+    - number: 4
+      agents:
+        - id: H
+          task: |
+            # Add Interactive Mode to Upgrade Command
+
+            Modify `src/commands/upgrade.rs` to add --interactive flag and preview logic.
+
+            ## What to implement
+
+            1. Add `--interactive` flag to UpgradeCommand struct:
+               ```rust
+               /// Show reasoning and preview before applying changes
+               #[arg(long)]
+               pub interactive: bool,
+               ```
+
+            2. Use the `interactive` field from UpgradeOptions (already added by Agent C in Wave 1):
+               Agent C added `pub interactive: bool` to UpgradeOptions in models.rs during Wave 1.
+               You don't need to modify models.rs — just use options.interactive in your logic.
+
+            3. Update UpgradeOptions construction in `run` function to include interactive:
+               ```rust
+               let options = UpgradeOptions {
+                   dry_run: cmd.dry_run,
+                   with_agent_references: cmd.with_agent_references,
+                   interactive: cmd.interactive,
+               };
+               ```
+
+            4. In `run` function, after building UpgradeOptions, if options.interactive:
+               - Print analysis results with reasoning (BloatAnalysis fields)
+               - Print routing graph if API key provided
+               - Print preview of SKILL.md frontmatter changes
+               - Prompt user: "Apply these changes? [y/N]"
+               - Read stdin, proceed only if "y" or "yes"
+
+            5. Update upgrade_skill call to be async (Agent E changed signature in Wave 3):
+               ```rust
+               crate::upgrade::upgrade_skill(&skill_path, &options).await?;
+               ```
+
+               NOTE: Agent E reads ANTHROPIC_API_KEY inside upgrade_skill (see APIKeyThreading
+               interface contract). You do NOT need to read the API key here - just call
+               upgrade_skill with await.
+
+            ## Interface contracts
+
+            Interactive mode requires user confirmation before applying changes. Non-interactive
+            mode (default) behaves as before. API key handling is done by upgrade_skill
+            (Agent E reads ANTHROPIC_API_KEY in Wave 3) - this command just calls it.
+
+            ## Tests
+
+            Create test module with:
+            - `test_upgrade_command_with_interactive` — verify flag parsing
+            - `test_upgrade_options_interactive_field` — verify UpgradeOptions struct
+
+            Note: End-to-end interactive test requires stdin mocking, which is complex.
+            Document in test comments that interactive mode is manually testable.
+
+            ## Verification gate
+
+            ```bash
+            cargo build
+            cargo clippy -- -D warnings
+            cargo test upgrade::tests
+            ```
+
+            ## Constraints
+
+            - Use existing UpgradeCommand and UpgradeOptions structs
+            - Do NOT read API key here - Agent E handles that in upgrade_skill
+            - Follow existing CLI output style (use colored crate for formatting)
+            - Mark run function as async to await upgrade_skill
+          files:
+            - src/commands/upgrade.rs
+          dependencies:
+            - E
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: cargo build
+          required: true
+        - type: test
+          command: cargo test
+          required: true
+        - type: lint
+          command: cargo clippy -- -D warnings
+          required: true
+        - type: format
+          command: cargo fmt --check
+          required: false
+completion_reports:
+    A:
+        status: complete
+        branch: saw/agentskills-progressive-disclosure/wave1-agent-A
+        commit: dc50d20
+        files_created:
+            - src/upgrade/pattern_detector.rs
+        tests_added:
+            - test_extract_subcommands_basic
+            - test_extract_subcommands_complex
+            - test_extract_subcommands_mixed_patterns
+            - test_extract_agent_types
+            - test_extract_agent_types_multiline
+            - test_extract_agent_types_array_format
+            - test_extract_agent_types_no_field
+            - test_missing_frontmatter
+            - test_missing_closing_delimiter
+            - test_malformed_yaml
+            - test_missing_argument_hint
+            - test_extract_subcommands_deduplicates
+            - test_extract_agent_types_deduplicates
+            - test_extract_subcommands_ignores_placeholders
+            - test_extract_agent_types_with_spacing_variations
+        verification: PASS
+    B:
+        status: complete
+        branch: saw/agentskills-progressive-disclosure/wave1-agent-B
+        commit: 32fb73e
+        files_changed:
+            - Cargo.toml
+            - src/error.rs
+        files_created:
+            - src/upgrade/semantic_analyzer.rs
+        tests_added:
+            - test_semantic_analyzer_new
+            - test_analyze_section_command_specific
+            - test_analyze_section_agent_specific
+            - test_analyze_section_always_loaded
+            - test_section_intent_serialization
+        verification: PASS
+    C:
+        status: complete
+        branch: saw/agentskills-progressive-disclosure/wave1-agent-C
+        commit: d8aedb6cb686a18d585a4e112dfcc48371594057
+        files_changed:
+            - src/models.rs
+            - src/commands/upgrade.rs
+        verification: PASS
+    D:
+        status: complete
+        branch: saw/agentskills-progressive-disclosure/wave1-agent-D
+        commit: f71e635
+        files_created:
+            - src/upgrade/frontmatter_gen.rs
+        tests_added:
+            - test_generate_triggers_single_node
+            - test_generate_triggers_multiple_nodes
+            - test_generate_triggers_empty_patterns
+            - test_generate_agent_references_single_node
+            - test_generate_agent_references_with_when
+            - test_generate_agent_references_multiple_agents
+            - test_generate_agent_references_empty_agent_types
+            - test_generate_triggers_multiple_patterns_per_node
+            - test_generate_agent_references_with_regex_condition
+        verification: PASS
+pre_mortem:
+    overall_risk: medium
+    rows:
+        - scenario: Claude API rate limits block semantic analysis during upgrade
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Add retry logic with exponential backoff in SemanticAnalyzer::analyze_section.
+            Fall back to mechanical splitter if API unavailable. Document API key requirement
+            in README and --help text.
+        - scenario: SAW script path hardcoded in generator breaks on user machines
+          likelihood: high
+          impact: low
+          mitigation: |
+            Acceptable for v1 — this tool is in same repo ecosystem. Future enhancement:
+            add --saw-script-path flag to upgrade command or detect via CLAUDE_SKILL_DIR env var.
+        - scenario: Semantic analysis misclassifies section intent
+          likelihood: medium
+          impact: medium
+          mitigation: |
+            Interactive mode (--interactive flag) shows reasoning and preview before applying.
+            User can abort if classification looks wrong. Add --dry-run-with-reasoning flag
+            to show semantic analysis without applying changes.
+        - scenario: Frontmatter generation produces invalid YAML indentation
+          likelihood: low
+          impact: high
+          mitigation: |
+            Add YAML validation pass in frontmatter_gen tests. Use serde_yaml to parse
+            generated YAML in tests — any indentation errors will cause test failures.
+        - scenario: Wave 2 agents modify overlapping sections of analyzer.rs/splitter.rs
+          likelihood: low
+          impact: low
+          mitigation: |
+            File ownership table assigns analyzer.rs to Agent E and splitter.rs to Agent F.
+            No overlap. Agent E modifies analyzer.rs imports and BloatAnalysis struct.
+            Agent F modifies splitter.rs split_content function. Clear separation.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+            issues:
+                - check: import_chains
+                  severity: warning
+                  description: Agent B brief specifies anthropic-sdk = "0.1.5" with IMPORTANT warning to verify API. Crates.io verification confirms package exists at correct version. However brief lines 323-327 require verification of Client type, claude-3-haiku model support, and Message API structure before implementation. This is advisory per brief instructions.
+                  file: Cargo.toml
+                  symbol: anthropic-sdk
+        C:
+            agent_id: C
+            verdict: PASS
+            issues:
+                - check: symbol_accuracy
+                  severity: error
+                  description: 'Agent C brief lines 435-448 state: Add interactive field to EXISTING UpgradeOptions struct. The struct already exists with dry_run and with_agent_references. You must ADD the interactive field as the third field. Agent H (Wave 4) depends on this field existing. Verified models.rs:91-94 shows struct with ONLY 2 fields (dry_run, with_agent_references). Agent C MUST add interactive: bool or Agent H fails at line 850 constructing UpgradeOptions { interactive: cmd.interactive }.'
+                  file: src/models.rs
+                  symbol: UpgradeOptions.interactive
+        D:
+            agent_id: D
+            verdict: PASS
+        E:
+            agent_id: E
+            verdict: PASS
+            issues:
+                - check: caller_exhaustiveness
+                  severity: error
+                  description: 'Agent E modifies BloatAnalysis struct (lines 609-618) adding subcommands and agent_types fields. Current struct has 4 fields. Grep shows 5 construction sites requiring updates: (1) analyzer.rs:122 production code, (2-5) splitter.rs test constructions at lines 194, 226, 253, 283. Brief correctly instructs exhaustive grep-based search at lines 619-625. Must update ALL sites with subcommands: vec![], agent_types: vec![] or compilation fails.'
+                  file: src/upgrade/analyzer.rs
+                  symbol: BloatAnalysis
+                - check: symbol_accuracy
+                  severity: error
+                  description: 'Agent E brief lines 629-641 adds 4 module exports to mod.rs: pattern_detector, semantic_analyzer, routing_graph, frontmatter_gen. These files are created by Wave 1 but briefs for Agents A/B/C/D explicitly state they do NOT modify mod.rs. Verified mod.rs:5-7 shows ONLY analyzer/generator/splitter. Agent E adds exports in Wave 2 when all files exist. However Agent F (Wave 3) imports these modules at lines 703-707 AFTER exports should exist. Wave number mismatch: E is Wave 2, F is Wave 3 - imports should work but briefs reference wrong wave numbers.'
+                  file: src/upgrade/mod.rs
+                  symbol: pattern_detector
+        F:
+            agent_id: F
+            verdict: PASS
+            issues:
+                - check: symbol_accuracy
+                  severity: error
+                  description: 'Agent F brief lines 703-707 imports crate::upgrade::semantic_analyzer, routing_graph, frontmatter_gen. Verified mod.rs shows these modules NOT exported. Wave 1 agent briefs (A/B/C/D) state: Agent E (Wave 2) adds module exports after Wave 1 merge. Agent F executes in Wave 3 AFTER Agent E Wave 2 exports. However file_ownership shows Agent E in Wave 2, Agent F in Wave 3. Import chain should work but execution order depends on merge-before-next-wave. If Wave 2 not merged before Wave 3 starts, imports fail.'
+                  file: src/upgrade/splitter.rs
+                  symbol: semantic_analyzer
+        G:
+            agent_id: G
+            verdict: PASS
+            issues:
+                - check: file_existence
+                  severity: warning
+                  description: Agent G hardcodes path /Users/dayna.blackwell/code/scout-and-wave/implementations/claude-code/prompts/scripts/inject-agent-context. Bash verification confirms file exists and is executable. However absolute path is machine-specific. Pre-mortem lines 928-933 acknowledges this as acceptable for same-repo ecosystem. Advisory only.
+                  file: src/upgrade/generator.rs
+        H:
+            agent_id: H
+            verdict: PASS
+            issues:
+                - check: symbol_accuracy
+                  severity: error
+                  description: 'Agent H brief lines 844-858 states: Use the interactive field from UpgradeOptions (already added by Agent C in Wave 1). Constructs UpgradeOptions at line 852 with interactive: cmd.interactive. Verified models.rs:91-94 shows UpgradeOptions has NO interactive field. Only dry_run and with_agent_references exist. Agent C brief claims to add this field but verification shows it missing. Dependency failure: Agent H assumes field exists but Agent C must add it first.'
+                  file: src/commands/upgrade.rs
+                  symbol: UpgradeOptions.interactive
+    summary: 'Critical wave coordination failures prevent execution. Five blocking errors: (1) Agent C must add UpgradeOptions.interactive field required by Agent H, (2) Wave 1 creates 4 modules but no agent exports them in mod.rs causing Agent F imports to fail, (3) Agent E BloatAnalysis modification breaks 5 construction sites across analyzer.rs and splitter.rs, (4) Agent F Wave 3 imports modules before Agent E Wave 2 exports them (wave ordering issue), (5) Agent H depends on field Agent C never adds. Core architectural gap: mod.rs ownership missing leaves module exports uncoordinated across waves.'
+    reviewed_at: "2026-03-27T05:43:38Z"
+    issue_count: 8
+state: SCOUT_PENDING
