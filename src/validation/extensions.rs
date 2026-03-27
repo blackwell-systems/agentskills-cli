@@ -14,6 +14,9 @@ use std::path::PathBuf;
 ///
 /// This encourages spec compliance while allowing vendor innovation.
 pub fn validate_extensions(metadata: &SkillMetadata, result: &mut ValidationResult) {
+    // Pre-compile regex outside loop
+    let semver_regex = Regex::new(r"^\d+(\.\d+)*$").unwrap();
+
     // Check for common vendor extensions in unknown_fields
     for (field_name, value) in &metadata.unknown_fields {
         match field_name.as_str() {
@@ -122,20 +125,17 @@ pub fn validate_extensions(metadata: &SkillMetadata, result: &mut ValidationResu
                 });
 
                 if let serde_yaml::Value::String(version) = value {
-                    if !version.trim().is_empty() {
-                        let semver_regex = Regex::new(r"^\d+(\.\d+)*$").unwrap();
-                        if !semver_regex.is_match(version.trim()) {
-                            result.add_warning(ValidationError {
-                                error_type: "invalid_version_format".to_string(),
-                                message: format!(
-                                    "Field 'version' has invalid semver format '{}'. Expected format like '1.0.0'",
-                                    version
-                                ),
-                                file: Some(PathBuf::from("SKILL.md")),
-                                line: None,
-                                severity: Severity::Warning,
-                            });
-                        }
+                    if !version.trim().is_empty() && !semver_regex.is_match(version.trim()) {
+                        result.add_warning(ValidationError {
+                            error_type: "invalid_version_format".to_string(),
+                            message: format!(
+                                "Field 'version' has invalid semver format '{}'. Expected format like '1.0.0'",
+                                version
+                            ),
+                            file: Some(PathBuf::from("SKILL.md")),
+                            line: None,
+                            severity: Severity::Warning,
+                        });
                     }
                 }
             }

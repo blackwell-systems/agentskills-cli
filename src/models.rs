@@ -102,21 +102,11 @@ pub struct RoutingGraph {
 }
 
 /// Configuration for upgrade command
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct UpgradeOptions {
     pub dry_run: bool,
     pub with_agent_references: bool,
     pub interactive: Option<bool>,
-}
-
-impl Default for UpgradeOptions {
-    fn default() -> Self {
-        Self {
-            dry_run: false,
-            with_agent_references: false,
-            interactive: None,
-        }
-    }
 }
 
 #[cfg(test)]

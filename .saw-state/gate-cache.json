@@ -12,6 +12,18 @@
         "cached_at": "2026-03-26T19:39:53.866481-07:00"
       }
     },
+    "1e9b2dd558cb90a9093076e74d3325eb": {
+      "test": {
+        "gate_type": "test",
+        "command": "cargo test",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "\nrunning 55 tests\ntest commands::lint::tests::test_lint_command_help ... ok\ntest commands::lint::tests::test_lint_command_with_json_flag ... ok\ntest commands::lint::tests::test_lint_command_missing_path ... ok\ntest commands::upgrade::tests::test_upgrade_command_all_flags ... ok\ntest commands::upgrade::tests::test_upgrade_command_missing_path ... ok\ntest commands::upgrade::tests::test_upgrade_command_help ... ok\ntest commands::upgrade::tests::test_upgrade_command_parsing ... ok\ntest commands::upgrade::tests::test_upgrade_command_with_agent_references ... ok\ntest commands::upgrade::tests::test_upgrade_command_with_dry_run ... ok\ntest error::tests::test_add_error ... ok\ntest error::tests::test_format_output_mixed ... ok\ntest error::tests::test_add_warning ... ok\ntest error::tests::test_format_output_no_issues ... ok\ntest commands::lint::tests::test_lint_command_parsing ... ok\ntest error::tests::test_format_output_with_errors ... ok\ntest error::tests::test_format_output_with_warnings ... ok\ntest error::tests::test_is_valid_with_errors ... ok\ntest error::tests::test_validation_result_new ... ok\ntest models::tests::test_missing_closing_delimiter ... ok\ntest models::tests::test_parse_minimal_frontmatter ... ok\ntest models::tests::test_malformed_yaml ... ok\ntest validation::base_spec::tests::test_missing_description ... ok\ntest validation::base_spec::tests::test_missing_name ... ok\ntest models::tests::test_empty_description_field ... ok\ntest models::tests::test_parse_with_model_context ... ok\ntest models::tests::test_empty_name_field ... ok\ntest models::tests::test_missing_frontmatter ... ok\ntest models::tests::test_parse_with_unknown_fields ... ok\ntest models::tests::test_parse_with_agent_references ... ok\ntest models::tests::test_parse_valid_frontmatter ... ok\ntest models::tests::test_upgrade_options_default ... ok\ntest models::tests::test_upgrade_options_with_partial_init ... ok\ntest models::tests::test_whitespace_only_fields ... ok\ntest validation::base_spec::tests::test_missing_both_fields ... ok\ntest validation::base_spec::tests::test_valid_base_spec ... ok\ntest validation::base_spec::tests::test_whitespace_only_description ... ok\ntest validation::base_spec::tests::test_whitespace_only_name ... ok\ntest validation::extensions::tests::test_empty_trigger ... ok\ntest validation::progressive_disclosure::tests::test_has_triggers_frontmatter ... ok\ntest validation::extensions::tests::test_empty_agent_reference ... ok\ntest validation::extensions::tests::test_empty_model ... ok\ntest validation::extensions::tests::test_empty_model_context ... ok\ntest validation::extensions::tests::test_unknown_fields_warning ... ok\ntest validation::extensions::tests::test_multiple_validation_issues ... ok\ntest validation::extensions::tests::test_valid_extensions ... ok\ntest validation::extensions::tests::test_invalid_version_format ... ok\ntest validation::extensions::tests::test_valid_version_formats ... ok\ntest validation::progressive_disclosure::tests::test_skill_md_over_200_lines ... ok\ntest validation::progressive_disclosure::tests::test_missing_inject_script_when_references_exist ... ok\ntest validation::progressive_disclosure::tests::test_skill_md_under_200_lines ... ok\ntest validation::progressive_disclosure::tests::test_triggers_without_references ... ok\ntest validation::progressive_disclosure::tests::test_missing_shebang ... ok\ntest validation::progressive_disclosure::tests::test_valid_dedup_marker ... ok\ntest validation::progressive_disclosure::tests::test_non_md_file_in_references ... ok\ntest validation::progressive_disclosure::tests::test_invalid_dedup_marker ... ok\n\ntest result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 9 tests\ntest test_lint_nonexistent_path ... ok\ntest test_upgrade_creates_directory_structure ... ok\ntest test_cli_help_flag ... ok\ntest test_upgrade_dry_run_no_files_written ... ok\ntest test_lint_json_output_valid ... ok\ntest test_lint_invalid_skill_fails ... ok\ntest test_upgrade_with_agent_references_flag ... ok\ntest test_lint_valid_skill_succeeds ... ok\ntest test_cli_version_flag ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+        "stderr": "warning: unused import: `super::*`\n  --\u003e src/validation/mod.rs:28:9\n   |\n28 |     use super::*;\n   |         ^^^^^^^^\n   |\n   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: unused import: `std::path::PathBuf`\n  --\u003e src/validation/mod.rs:29:9\n   |\n29 |     use std::path::PathBuf;\n   |         ^^^^^^^^^^^^^^^^^^\n\nwarning: `agentskills` (lib test) generated 2 warnings (run `cargo fix --lib -p agentskills --tests` to apply 2 suggestions)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s\n     Running unittests src/lib.rs (target/debug/deps/agentskills-cff25473695ba6c4)\n     Running unittests src/main.rs (target/debug/deps/agentskills-75f0e2bc5eac10fc)\n     Running tests/integration_test.rs (target/debug/deps/integration_test-1ac3127ce995376f)\n   Doc-tests agentskills\n",
+        "from_cache": true,
+        "cached_at": "2026-03-26T23:13:07.297948-07:00"
+      }
+    },
     "3ebf2d2940f9de09568b607e3b06e06b": {
       "lint": {
         "gate_type": "lint",
@@ -24,6 +36,18 @@
         "cached_at": "2026-03-26T19:39:54.247603-07:00"
       }
     },
+    "6b9c5202304790ee32151ac09fc57a42": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "cargo clippy -- -D warnings",
+        "passed": false,
+        "exit_code": 101,
+        "stdout": "",
+        "stderr": "    Checking agentskills v0.1.0 (/Users/dayna.blackwell/code/agentskills-cli)\nerror: this `impl` can be derived\n   --\u003e src/models.rs:112:1\n    |\n112 | / impl Default for UpgradeOptions {\n113 | |     fn default() -\u003e Self {\n114 | |         Self {\n115 | |             dry_run: false,\n...   |\n120 | | }\n    | |_^\n    |\n    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.93.0/index.html#derivable_impls\n    = note: `-D clippy::derivable-impls` implied by `-D warnings`\n    = help: to override `-D warnings` add `#[allow(clippy::derivable_impls)]`\nhelp: replace the manual implementation with a derive attribute\n    |\n106 + #[derive(Default)]\n107 | pub struct UpgradeOptions {\n    |\n\nerror: compiling a regex in a loop\n   --\u003e src/validation/extensions.rs:126:44\n    |\n126 |                         let semver_regex = Regex::new(r\"^\\d+(\\.\\d+)*$\").unwrap();\n    |                                            ^^^^^^^^^^\n    |\nhelp: move the regex construction outside this loop\n   --\u003e src/validation/extensions.rs:18:5\n    |\n 18 |     for (field_name, value) in \u0026metadata.unknown_fields {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.93.0/index.html#regex_creation_in_loops\n    = note: `-D clippy::regex-creation-in-loops` implied by `-D warnings`\n    = help: to override `-D warnings` add `#[allow(clippy::regex_creation_in_loops)]`\n\nerror: could not compile `agentskills` (lib) due to 2 previous errors\n",
+        "from_cache": true,
+        "cached_at": "2026-03-26T23:13:08.036826-07:00"
+      }
+    },
     "6e13fd73426a21d5930b9dbbbc5de894": {
       "test": {
         "gate_type": "test",
@@ -34,6 +58,18 @@
         "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s\n     Running unittests src/lib.rs (target/debug/deps/agentskills-40eac5bd00212ae4)\n     Running unittests src/main.rs (target/debug/deps/agentskills-6e43f94ff4495144)\n   Doc-tests agentskills\n",
         "from_cache": true,
         "cached_at": "2026-03-26T19:39:54.613582-07:00"
+      }
+    },
+    "e4b9e9d3c8ab9b6ef68b484aedd78882": {
+      "build": {
+        "gate_type": "build",
+        "command": "cargo build",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s\n",
+        "from_cache": true,
+        "cached_at": "2026-03-26T23:13:06.486204-07:00"
       }
     }
   }
