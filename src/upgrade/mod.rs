@@ -7,9 +7,11 @@ pub mod analyzer;
 pub mod generator;
 pub mod splitter;
 pub mod pattern_detector;
-pub mod claude_client;
-pub mod api_client;
-pub mod cli_client;
+pub mod semantic_analyzer;
+pub mod anthropic_api;
+pub mod anthropic_cli;
+pub mod gemini_api;
+pub mod gemini_cli;
 pub mod routing_graph;
 pub mod frontmatter_gen;
 
@@ -37,11 +39,11 @@ pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Resul
         return Ok(());
     }
 
-    // Create Claude client for semantic analysis (API or CLI)
-    let client = claude_client::new_client();
+    // Create semantic analyzer (supports multiple providers: Anthropic, Gemini)
+    let analyzer = semantic_analyzer::new_analyzer();
 
     // Step 3: Split content
-    let split_result = splitter::split_content(skill_path, &analysis, client).await?;
+    let split_result = splitter::split_content(skill_path, &analysis, analyzer).await?;
 
     // Step 4: Generate inject script
     let reference_list: Vec<String> = split_result.reference_files.keys().cloned().collect();

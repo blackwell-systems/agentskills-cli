@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::upgrade::analyzer::BloatAnalysis;
-use crate::upgrade::claude_client::{ClaudeClient, SectionIntent};
+use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
 use crate::upgrade::frontmatter_gen;
 use crate::upgrade::pattern_detector;
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ pub struct SplitResult {
 pub async fn split_content(
     skill_path: &Path,
     analysis: &BloatAnalysis,
-    client: Option<Box<dyn ClaudeClient>>,
+    analyzer: Option<Box<dyn SemanticAnalyzer>>,
 ) -> Result<SplitResult, Error> {
     let content = fs::read_to_string(skill_path)
         .map_err(|e| Error::ValidationError(format!("Failed to read SKILL.md: {}", e)))?;
@@ -67,7 +67,7 @@ pub async fn split_content(
     let core_body = core_lines.join("\n");
 
     // Generate triggers and agent-references frontmatter
-    let (triggers_yaml, agent_refs_yaml) = if let Some(claude_client) = client {
+    let (triggers_yaml, agent_refs_yaml) = if let Some(claude_analyzer) = analyzer {
         // Semantic analysis path with Claude (API or CLI)
         // Extract subcommands and agent types from original content
         let subcommands = pattern_detector::extract_subcommands(&content)?;
@@ -79,7 +79,7 @@ pub async fn split_content(
             let section_content: String = lines[suggestion.start_line..suggestion.end_line]
                 .join("\n");
 
-            let intent = claude_client
+            let intent = claude_analyzer
                 .analyze_section(&suggestion.section_name, &section_content)
                 .await?;
 
@@ -412,9 +412,9 @@ This section is for wave agent only.
             agent_types: vec![],
         };
 
-        // Use client factory (test will be ignored if neither API key nor CLI available)
-        let client = crate::upgrade::claude_client::new_client();
-        let result = split_content(temp_file.path(), &analysis, client).await.unwrap();
+        // Use analyzer factory (test will be ignored if neither API key nor CLI available)
+        let analyzer = crate::upgrade::semantic_analyzer::new_analyzer();
+        let result = split_content(temp_file.path(), &analysis, analyzer).await.unwrap();
 
         // Should have generated frontmatter with triggers and agent-references
         assert!(result.core_content.contains("triggers:"));

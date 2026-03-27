@@ -1,24 +1,25 @@
 use crate::error::Error;
-use crate::upgrade::claude_client::{ClaudeClient, SectionIntent};
-use anthropic_sdk::Client;
+use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
 use async_trait::async_trait;
-use serde_json::json;
-use std::sync::{Arc, Mutex};
+use gemini_client_rs::{
+    GeminiClient,
+    types::{Content, ContentPart, GenerateContentRequest, Role},
+};
 
-/// API-based Claude client using Anthropic SDK
-pub struct ApiClient {
+/// API-based Gemini analyzer using Google Gemini API
+pub struct GeminiApi {
     api_key: String,
 }
 
-impl ApiClient {
-    /// Create a new API client with the provided API key
+impl GeminiApi {
+    /// Create a new Gemini API analyzer with the provided API key
     pub fn new(api_key: String) -> Self {
         Self { api_key }
     }
 }
 
 #[async_trait]
-impl ClaudeClient for ApiClient {
+impl SemanticAnalyzer for GeminiApi {
     async fn analyze_section(
         &self,
         section_header: &str,
@@ -31,7 +32,7 @@ impl ClaudeClient for ApiClient {
             section_content
         };
 
-        // Construct analysis prompt
+        // Construct analysis prompt (same as Anthropic)
         let prompt = format!(
             r#"This is a section from an Agent Skill. Section header: "{section_header}".
 
@@ -56,40 +57,55 @@ Respond ONLY with valid JSON in this exact format:
 }}"#
         );
 
-        // Build request using SDK builder pattern
-        let request = Client::new()
-            .auth(&self.api_key)
-            .model("claude-3-haiku-20240307")
-            .messages(&json!([
-                {"role": "user", "content": prompt}
-            ]))
-            .max_tokens(500)
-            .stream(false)
-            .build()
-            .map_err(|e| Error::ApiError(format!("Failed to build request: {}", e)))?;
+        // Build Gemini client and request
+        let client = GeminiClient::new(self.api_key.clone());
 
-        // Execute request and collect response
-        let response_text = Arc::new(Mutex::new(String::new()));
-        let response_clone = response_text.clone();
+        // Create request with proper structure
+        let content_part = ContentPart::new_text(&prompt, false);
+        let content = Content {
+            parts: vec![content_part],
+            role: Some(Role::User),
+        };
+        let request = GenerateContentRequest {
+            contents: vec![content],
+            system_instruction: None,
+            tools: vec![],
+            tool_config: None,
+            generation_config: None,
+        };
 
-        request
-            .execute(move |text| {
-                let response_clone = response_clone.clone();
-                async move {
-                    let mut response = response_clone.lock().unwrap();
-                    response.push_str(&text);
+        // Execute request
+        let response = client
+            .generate_content("gemini-1.5-flash", &request)
+            .await
+            .map_err(|e| Error::ApiError(format!("Gemini API call failed: {}", e)))?;
+
+        // Extract text from response
+        let response_text = response
+            .candidates
+            .first()
+            .and_then(|c| c.content.as_ref())
+            .and_then(|content| content.parts.first())
+            .and_then(|p| {
+                match &p.data {
+                    gemini_client_rs::types::ContentData::Text(text) => Some(text.as_str()),
+                    _ => None,
                 }
             })
-            .await
-            .map_err(|e| Error::ApiError(format!("Claude API call failed: {}", e)))?;
+            .ok_or_else(|| Error::ApiError("Gemini response missing text content".to_string()))?;
 
-        let final_response = response_text.lock().unwrap().clone();
+        // Parse JSON response (strip markdown code fences if present)
+        let json_str = response_text
+            .trim()
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
 
-        // Parse JSON response
-        let intent: SectionIntent = serde_json::from_str(&final_response).map_err(|e| {
+        let intent: SectionIntent = serde_json::from_str(json_str).map_err(|e| {
             Error::ApiError(format!(
-                "Failed to parse Claude response as JSON: {}. Response: {}",
-                e, final_response
+                "Failed to parse Gemini response as JSON: {}. Response: {}",
+                e, response_text
             ))
         })?;
 
@@ -102,19 +118,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_api_client_new() {
-        let client = ApiClient::new("test-api-key".to_string());
-        assert_eq!(client.api_key, "test-api-key");
+    fn test_gemini_api_new() {
+        let analyzer = GeminiApi::new("test-api-key".to_string());
+        assert_eq!(analyzer.api_key, "test-api-key");
     }
 
     #[tokio::test]
-    #[ignore] // Requires live API key in ANTHROPIC_API_KEY env var
+    #[ignore] // Requires live API key in GOOGLE_API_KEY env var
     async fn test_analyze_section_command_specific() {
-        let api_key = std::env::var("ANTHROPIC_API_KEY")
-            .expect("ANTHROPIC_API_KEY env var required for live API tests");
-        let client = ApiClient::new(api_key);
+        let api_key = std::env::var("GOOGLE_API_KEY")
+            .expect("GOOGLE_API_KEY env var required for live API tests");
+        let analyzer = GeminiApi::new(api_key);
 
-        let result = client
+        let result = analyzer
             .analyze_section(
                 "Scout Agent Instructions",
                 "This section provides detailed instructions for the Scout agent when executing /saw scout commands...",
@@ -130,11 +146,11 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires live API key
     async fn test_analyze_section_agent_specific() {
-        let api_key = std::env::var("ANTHROPIC_API_KEY")
-            .expect("ANTHROPIC_API_KEY env var required for live API tests");
-        let client = ApiClient::new(api_key);
+        let api_key = std::env::var("GOOGLE_API_KEY")
+            .expect("GOOGLE_API_KEY env var required for live API tests");
+        let analyzer = GeminiApi::new(api_key);
 
-        let result = client
+        let result = analyzer
             .analyze_section(
                 "Wave Agent Protocol",
                 "You are a Wave Agent in the Scout-and-Wave protocol. You implement a specific feature component...",
@@ -149,11 +165,11 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires live API key
     async fn test_analyze_section_always_loaded() {
-        let api_key = std::env::var("ANTHROPIC_API_KEY")
-            .expect("ANTHROPIC_API_KEY env var required for live API tests");
-        let client = ApiClient::new(api_key);
+        let api_key = std::env::var("GOOGLE_API_KEY")
+            .expect("GOOGLE_API_KEY env var required for live API tests");
+        let analyzer = GeminiApi::new(api_key);
 
-        let result = client
+        let result = analyzer
             .analyze_section(
                 "General Instructions",
                 "These are general purpose instructions that apply to all agent invocations regardless of context...",

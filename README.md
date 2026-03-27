@@ -125,12 +125,14 @@ agent-references:
 
 ### Semantic Analysis Authentication
 
-The `upgrade` command's semantic analysis supports two authentication methods (checked in order):
+The `upgrade` command's semantic analysis supports multiple AgentSkills-compliant providers (checked in order):
 
-1. **API Key** - Set `ANTHROPIC_API_KEY` environment variable
+1. **Anthropic API** - Set `ANTHROPIC_API_KEY` environment variable
 2. **Claude CLI** - Have `claude` command available on PATH (Max plan users)
+3. **Gemini API** - Set `GOOGLE_API_KEY` environment variable
+4. **Gemini CLI** - Have `gemini` command available on PATH
 
-Without either, the tool falls back to mechanical splitting (section headers only).
+Without any provider, the tool falls back to mechanical splitting (section headers only).
 
 ## Installation
 
@@ -145,7 +147,7 @@ cargo install --path .
 ### Requirements
 
 - Rust 1.75+
-- (Optional) Claude API key or Claude CLI for semantic analysis
+- (Optional) LLM provider for semantic analysis: Anthropic (API/CLI) or Google Gemini (API/CLI)
 
 ## Bundled Skills
 

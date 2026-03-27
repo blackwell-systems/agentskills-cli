@@ -1,25 +1,23 @@
 use crate::error::Error;
-use crate::upgrade::claude_client::{ClaudeClient, SectionIntent};
+use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Command;
 
-/// CLI-based Claude client that shells out to `claude` command
-///
-/// Mirrors the implementation in scout-and-wave-go/pkg/agent/backend/cli/client.go
-pub struct CliClient {
-    claude_path: PathBuf,
+/// CLI-based Gemini analyzer that shells out to `gemini` command
+pub struct GeminiCli {
+    gemini_path: PathBuf,
 }
 
-impl CliClient {
-    /// Create a new CLI client with the given path to the claude binary
-    pub fn new(claude_path: PathBuf) -> Self {
-        Self { claude_path }
+impl GeminiCli {
+    /// Create a new Gemini CLI analyzer with the given path to the gemini binary
+    pub fn new(gemini_path: PathBuf) -> Self {
+        Self { gemini_path }
     }
 }
 
 #[async_trait]
-impl ClaudeClient for CliClient {
+impl SemanticAnalyzer for GeminiCli {
     async fn analyze_section(
         &self,
         section_header: &str,
@@ -32,7 +30,7 @@ impl ClaudeClient for CliClient {
             section_content
         };
 
-        // Construct analysis prompt (same as API client)
+        // Construct analysis prompt (same as other providers)
         let prompt = format!(
             r#"This is a section from an Agent Skill. Section header: "{section_header}".
 
@@ -57,33 +55,33 @@ Respond ONLY with valid JSON in this exact format:
 }}"#
         );
 
-        // Shell out to claude CLI
-        // Use --print (no tool execution)
-        let output = Command::new(&self.claude_path)
-            .arg("--print")
+        // Shell out to gemini CLI
+        // Use -p for headless mode (non-interactive)
+        let output = Command::new(&self.gemini_path)
             .arg("-p")
             .arg(prompt)
             .output()
-            .map_err(|e| Error::ValidationError(format!("Failed to execute claude CLI: {}", e)))?;
+            .map_err(|e| Error::ValidationError(format!("Failed to execute gemini CLI: {}", e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(Error::ApiError(format!(
-                "claude CLI exited with status {}: {}",
+                "gemini CLI exited with status {}: {}",
                 output.status, stderr
             )));
         }
 
         // Parse stdout as JSON (strip markdown code fences if present)
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let json_str = stdout.trim()
+        let json_str = stdout
+            .trim()
             .trim_start_matches("```json")
             .trim_start_matches("```")
             .trim_end_matches("```")
             .trim();
         let intent: SectionIntent = serde_json::from_str(json_str).map_err(|e| {
             Error::ApiError(format!(
-                "Failed to parse claude CLI response as JSON: {}. Response: {}",
+                "Failed to parse gemini CLI response as JSON: {}. Response: {}",
                 e, stdout
             ))
         })?;
@@ -95,29 +93,28 @@ Respond ONLY with valid JSON in this exact format:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
-    fn test_cli_client_new() {
-        let client = CliClient::new(PathBuf::from("/usr/local/bin/claude"));
+    fn test_gemini_cli_new() {
+        let analyzer = GeminiCli::new(PathBuf::from("/usr/local/bin/gemini"));
         assert_eq!(
-            client.claude_path,
-            PathBuf::from("/usr/local/bin/claude")
+            analyzer.gemini_path,
+            PathBuf::from("/usr/local/bin/gemini")
         );
     }
 
     #[tokio::test]
-    #[ignore] // Requires claude CLI installed
+    #[ignore] // Requires gemini CLI installed
     async fn test_analyze_section_with_cli() {
-        // Try to find claude on PATH
-        let claude_path = which::which("claude");
-        if claude_path.is_err() {
-            eprintln!("claude CLI not found on PATH, skipping test");
+        // Try to find gemini on PATH
+        let gemini_path = which::which("gemini");
+        if gemini_path.is_err() {
+            eprintln!("gemini CLI not found on PATH, skipping test");
             return;
         }
 
-        let client = CliClient::new(claude_path.unwrap());
-        let result = client
+        let analyzer = GeminiCli::new(gemini_path.unwrap());
+        let result = analyzer
             .analyze_section(
                 "Scout Agent Instructions",
                 "This section provides detailed instructions for the Scout agent when executing /saw scout commands...",
@@ -131,16 +128,13 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_client_invalid_binary() {
-        let client = CliClient::new(PathBuf::from("/nonexistent/claude"));
+    fn test_gemini_cli_invalid_binary() {
+        let analyzer = GeminiCli::new(PathBuf::from("/nonexistent/gemini"));
         let runtime = tokio::runtime::Runtime::new().unwrap();
-        let result = runtime.block_on(client.analyze_section(
-            "Test",
-            "Test content",
-        ));
+        let result = runtime.block_on(analyzer.analyze_section("Test", "Test content"));
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("Failed to execute claude CLI"));
+        assert!(err_msg.contains("Failed to execute gemini CLI"));
     }
 }

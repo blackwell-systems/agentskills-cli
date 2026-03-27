@@ -1,5 +1,5 @@
 use crate::models::{RoutingGraph, RoutingNode};
-use crate::upgrade::claude_client::SectionIntent;
+use crate::upgrade::semantic_analyzer::SectionIntent;
 
 /// Build routing graph from pattern detector output and semantic analysis results
 ///
