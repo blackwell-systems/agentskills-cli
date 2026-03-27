@@ -67,10 +67,11 @@ Transforms large skills into progressive disclosure with semantic analysis and c
 
 **What it does:**
 1. **Pattern detection** - Extracts subcommands and agent types from frontmatter
-2. **Semantic analysis** - Uses Claude API to classify section routing intent
+2. **Semantic analysis** - Classifies section routing intent AND timing (invocation vs runtime)
 3. **Smart splitting** - Moves detailed content to `references/` loaded on-demand
-4. **Routing generation** - Creates `triggers` and `agent-references` frontmatter
-5. **Script bundling** - Includes production inject-agent-context script
+4. **Control flow externalization** - Converts runtime branches into explicit Read instructions
+5. **Routing generation** - Creates `triggers` and `agent-references` frontmatter
+6. **Script bundling** - Includes production inject-agent-context script
 
 **Three-tier architecture:**
 - **Tier 1:** Metadata (always loaded) - `name`, `description` for skill discovery
@@ -122,6 +123,67 @@ agent-references:
     when:
       agent_type: "scout"
 ```
+
+### Invocation vs Runtime Timing
+
+**NEW:** Semantic analysis now classifies WHEN sections are needed, not just IF they're conditional.
+
+**Invocation-time sections** (triggered by user request):
+- Subcommands: `--examples`, `/scout`, `--dry-run`
+- Agent types: `wave-agent`, `scout`
+- Explicit topics: "when user asks about X"
+
+**Runtime sections** (triggered during execution):
+- Failures: "if CI fails", "when test fails"
+- Errors: "when error occurs", "on retry"
+- Missing resources: "if artifact not found"
+- State transitions: "after command completes"
+
+**How they're handled:**
+
+| Timing | Core SKILL.md | References | Loading |
+|--------|---------------|------------|---------|
+| **Invocation** | Removed entirely | Extracted | Frontmatter trigger (automatic) |
+| **Runtime** | Breadcrumb left | Extracted | Explicit Read instruction |
+
+**Example - Release skill with CI failure handling:**
+
+Before upgrade (283 lines):
+```markdown
+## Step 7 — Watch CI
+[monitoring code]
+
+## Step 8 — Diagnose failures
+If CI fails:
+1. Fetch failed logs
+2. Identify root cause
+3. Propose fix
+[30 lines of retry logic]
+
+## Step 9 — Verify release
+[verification code]
+```
+
+After upgrade (core: ~160 lines):
+```markdown
+## Step 7 — Watch CI
+[monitoring code]
+
+## Step 8 — Diagnose failures [See references/diagnose-failures.md when CI fails]
+
+Read `${SKILL_DIR}/references/diagnose-failures.md` and follow its instructions.
+
+## Step 9 — Verify release
+[verification code]
+```
+
+**Why breadcrumbs matter:**
+- Preserve sequential flow (Step 7 → 8 → 9 still visible)
+- Show WHAT to do (read references/diagnose-failures.md)
+- Show WHEN to do it (when CI fails)
+- LLM executes Read tool at the right moment
+
+This is **control flow externalization** - implicit runtime branches become explicit, tool-callable instructions.
 
 ### Semantic Analysis Authentication
 
@@ -186,10 +248,11 @@ Detected patterns:
 - Subcommands: `scout`, `wave`, `status`
 - Agent types: `scout`, `wave-agent`
 
-### Semantic Analysis (with ANTHROPIC_API_KEY or Claude CLI)
+### Semantic Analysis (with LLM provider)
 
-Classifies each section's routing intent:
+Classifies each section's routing intent AND timing:
 
+**Example 1: Agent-specific section**
 ```markdown
 ## Scout Pre-flight Validation
 
@@ -199,7 +262,7 @@ Before launching a Scout agent, verify...
 Analyzed as:
 - `is_agent_specific: true` (mentions "Scout agent")
 - `agent_type: "scout"`
-- `is_command_specific: false`
+- `trigger_timing: "invocation"` (loaded when scout agent launches)
 
 Generates:
 ```yaml
@@ -207,6 +270,25 @@ agent-references:
   - file: references/scout-validation.md
     when:
       agent_type: "scout"
+```
+
+**Example 2: Runtime-triggered section**
+```markdown
+## CI Failure Diagnosis
+
+If CI fails during release, follow these steps...
+```
+
+Analyzed as:
+- `is_conditional: true`
+- `condition_pattern: "CI fails"`
+- `trigger_timing: "runtime"` (loaded when failure occurs during execution)
+
+Generates breadcrumb in core:
+```markdown
+## CI Failure Diagnosis — [See references/ci-failure-diagnosis.md when CI fails]
+
+Read `${SKILL_DIR}/references/ci-failure-diagnosis.md` and follow its instructions.
 ```
 
 ### Mechanical Fallback (no API key)
