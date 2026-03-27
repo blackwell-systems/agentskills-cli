@@ -34,7 +34,7 @@ Validates Agent Skills against the [base specification](https://agentskills.io/s
 - Vendor extensions (`triggers`, `agent-references`, `model`, `version`)
 - inject-agent-context script presence and format
 
-**Philosophy:** Warns about non-standard fields without blocking on them. This is ecosystem-aware validation - vendor extensions serve real needs (conditional loading, model selection) and often become spec features. The tool helps you understand your conformance level and portability tradeoffs, not just pass/fail.
+Warns about non-standard fields without blocking on them. This is ecosystem-aware validation - vendor extensions serve real needs (conditional loading, model selection) and often become spec features. The tool helps you understand your conformance level and portability tradeoffs, not just pass/fail.
 
 ```bash
 # Validate a skill
