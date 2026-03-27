@@ -1,6 +1,11 @@
 # agentskills-cli
 
-CLI for validating and upgrading [Agent Skills](https://agentskills.io/specification): enforce spec compliance, convert large skills into progressive disclosure, and detect vendor extensions.
+CLI for validating and upgrading [Agent Skills](https://agentskills.io/specification) with control-flow awareness.
+
+Converts large, monolithic skills into structured, portable programs by:
+- Splitting content into progressive disclosure
+- Classifying when sections are needed (invocation vs runtime)
+- Converting implicit control flow into explicit, executable instructions
 
 The official validator checks strict base-spec conformance. `agentskills-cli` is designed for real-world skills: it validates the base spec, detects vendor extensions without breaking on them, and helps migrate large or vendor-specific skills toward portable progressive disclosure.
 
@@ -20,7 +25,7 @@ A skill can apply progressive disclosure at runtime. This CLI compiles it ahead 
 
 Progressive disclosure is a structural concern: it determines what enters the model's context and when. Doing that work at runtime requires loading and reasoning about large skills inside the model itself.
 
-This CLI moves that work to build time. It analyzes, restructures, and generates routing ahead of execution, producing deterministic, reusable artifacts that never require the model to process the full skill again.
+This CLI moves that work to build time. It analyzes, restructures, and generates routing ahead of execution, producing deterministic, reusable artifacts that never require the model to process the full skill again. This avoids requiring the model to reason over the full skill at runtime.
 
 In practice: skills run at runtime. This tool shapes them before they ever run.
 
@@ -30,6 +35,29 @@ In practice: skills run at runtime. This tool shapes them before they ever run.
 - You have a large skill and want to split it into progressive disclosure
 - You want to detect vendor extensions and understand portability
 - You are building skills for distribution across multiple agent platforms
+
+## What this enables
+
+**Runtime logic is preserved, but externalized into explicit instructions the model can execute.**
+
+Before upgrade (283 lines):
+```markdown
+## Step 8 — Diagnose failures
+If CI fails:
+1. Fetch failed logs
+2. Identify root cause
+3. Propose fix
+[30 lines of retry logic]
+```
+
+After upgrade (core: ~160 lines):
+```markdown
+## Step 8 — Diagnose failures [See references/diagnose-failures.md when CI fails]
+
+Read `${SKILL_DIR}/references/diagnose-failures.md` and follow its instructions.
+```
+
+The sequential flow (Step 7 → 8 → 9) remains visible in the core skill. The runtime branch becomes an explicit Read instruction executed at the right moment.
 
 ## Features
 
@@ -124,9 +152,9 @@ agent-references:
       agent_type: "scout"
 ```
 
-### Invocation vs Runtime Timing
+### Control Flow Awareness (Invocation vs Runtime)
 
-**NEW:** Semantic analysis now classifies WHEN sections are needed, not just IF they're conditional.
+Semantic analysis classifies WHEN each section is needed:
 
 **Invocation-time sections** (triggered by user request):
 - Subcommands: `--examples`, `/scout`, `--dry-run`
@@ -248,7 +276,7 @@ Detected patterns:
 - Subcommands: `scout`, `wave`, `status`
 - Agent types: `scout`, `wave-agent`
 
-### Semantic Analysis (with LLM provider)
+### How Semantic Analysis Works
 
 Classifies each section's routing intent AND timing:
 
