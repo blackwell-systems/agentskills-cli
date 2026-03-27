@@ -131,16 +131,14 @@ my-skill/
     └── troubleshooting.md (runtime content with breadcrumb)
 ```
 
-**Frontmatter preserved:**
+**Frontmatter unchanged:**
 ```yaml
 ---
 name: my-skill
-description: Original description preserved unchanged
-# All existing custom fields remain
+description: Original description preserved
+# All existing fields remain exactly as they were
 ---
 ```
-
-The tool extracts sections but does NOT add `triggers:` or `agent-references:` fields.
 
 ### Control Flow Awareness (Invocation vs Runtime)
 
