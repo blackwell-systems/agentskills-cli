@@ -1,7 +1,6 @@
-use crate::models::Error;
+use crate::error::Error;
 use crate::upgrade::analyzer::BloatAnalysis;
 use crate::upgrade::claude_client::{ClaudeClient, SectionIntent};
-use crate::upgrade::routing_graph::RoutingGraph;
 use crate::upgrade::frontmatter_gen;
 use crate::upgrade::pattern_detector;
 use std::collections::HashMap;
@@ -23,7 +22,7 @@ pub async fn split_content(
     client: Option<Box<dyn ClaudeClient>>,
 ) -> Result<SplitResult, Error> {
     let content = fs::read_to_string(skill_path)
-        .map_err(|e| Error::IoError(format!("Failed to read SKILL.md: {}", e)))?;
+        .map_err(|e| Error::ValidationError(format!("Failed to read SKILL.md: {}", e)))?;
 
     let lines: Vec<&str> = content.lines().collect();
     let mut reference_files = HashMap::new();
@@ -92,7 +91,7 @@ pub async fn split_content(
         }
 
         // Build routing graph from patterns and semantic analysis
-        let routing_graph = routing_graph::build(&subcommands, &agent_types, &sections_with_intent);
+        let routing_graph = crate::upgrade::routing_graph::build(&subcommands, &agent_types, &sections_with_intent);
 
         // Generate frontmatter from routing graph
         let triggers = frontmatter_gen::generate_triggers(&routing_graph);
@@ -187,7 +186,7 @@ fn extract_frontmatter(content: &str) -> (String, String) {
 fn merge_frontmatter(
     existing: &str,
     triggers_yaml: &str,
-    analysis: &BloatAnalysis,
+    _analysis: &BloatAnalysis,
 ) -> String {
     // Strip delimiters from both
     let existing_stripped = existing
@@ -262,6 +261,8 @@ Content 2
             }],
             trigger_patterns: vec!["/test".to_string()],
             needs_agent_references: false,
+            subcommands: vec![],
+            agent_types: vec![],
         };
 
         let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
@@ -289,6 +290,8 @@ Content here
             suggested_splits: vec![],
             trigger_patterns: vec!["/test".to_string(), "test:".to_string()],
             needs_agent_references: false,
+            subcommands: vec![],
+            agent_types: vec![],
         };
 
         let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
@@ -316,6 +319,8 @@ Content here
             suggested_splits: vec![],
             trigger_patterns: vec!["/existing".to_string()],
             needs_agent_references: false,
+            subcommands: vec![],
+            agent_types: vec![],
         };
 
         let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
@@ -351,6 +356,8 @@ Content to extract
             }],
             trigger_patterns: vec!["/test".to_string()],
             needs_agent_references: true,
+            subcommands: vec![],
+            agent_types: vec![],
         };
 
         let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
@@ -401,6 +408,8 @@ This section is for wave agent only.
             ],
             trigger_patterns: vec!["/test".to_string()],
             needs_agent_references: true,
+            subcommands: vec![],
+            agent_types: vec![],
         };
 
         // Use client factory (test will be ignored if neither API key nor CLI available)

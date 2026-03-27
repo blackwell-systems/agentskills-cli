@@ -1,4 +1,4 @@
-use crate::models::Error;
+use crate::error::Error;
 use std::fs;
 use std::path::Path;
 
@@ -23,13 +23,13 @@ fn bundle_inject_script() -> Result<String, Error> {
     let script_path = Path::new("/Users/dayna.blackwell/code/scout-and-wave/implementations/claude-code/prompts/scripts/inject-agent-context");
 
     if !script_path.exists() {
-        return Err(Error::IoError(
+        return Err(Error::ValidationError(
             format!("inject-agent-context script not found at {:?}", script_path)
         ));
     }
 
     let script_content = fs::read_to_string(script_path)
-        .map_err(|e| Error::IoError(format!("Failed to read inject-agent-context script: {}", e)))?;
+        .map_err(|e| Error::ValidationError(format!("Failed to read inject-agent-context script: {}", e)))?;
 
     Ok(script_content)
 }

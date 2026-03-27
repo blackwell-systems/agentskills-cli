@@ -1,3 +1,4 @@
+#![allow(clippy::collapsible_if)]
 use crate::error::Error;
 use regex::Regex;
 

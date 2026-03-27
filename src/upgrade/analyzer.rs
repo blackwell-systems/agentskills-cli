@@ -1,4 +1,5 @@
-use crate::models::{Error, SkillMetadata, UpgradeOptions};
+use crate::error::Error;
+use crate::models::{ SkillMetadata, UpgradeOptions};
 use crate::upgrade::pattern_detector;
 use regex::Regex;
 use std::fs;
@@ -27,7 +28,7 @@ pub struct SplitSuggestion {
 /// Analyzes SKILL.md for bloat and suggests upgrades
 pub fn analyze_bloat(skill_path: &Path, options: &UpgradeOptions) -> Result<BloatAnalysis, Error> {
     let content = fs::read_to_string(skill_path)
-        .map_err(|e| Error::IoError(format!("Failed to read SKILL.md: {}", e)))?;
+        .map_err(|e| Error::ValidationError(format!("Failed to read SKILL.md: {}", e)))?;
 
     let lines: Vec<&str> = content.lines().collect();
     let total_lines = lines.len();
@@ -158,6 +159,7 @@ mod tests {
         let options = UpgradeOptions {
             dry_run: false,
             with_agent_references: false,
+            interactive: None,
         };
 
         let result = analyze_bloat(temp_file.path(), &options).unwrap();
@@ -188,6 +190,7 @@ This is a small section.
         let options = UpgradeOptions {
             dry_run: false,
             with_agent_references: false,
+            interactive: None,
         };
 
         let result = analyze_bloat(temp_file.path(), &options).unwrap();
@@ -219,6 +222,7 @@ Content here.
         let options = UpgradeOptions {
             dry_run: false,
             with_agent_references: false,
+            interactive: None,
         };
 
         let result = analyze_bloat(temp_file.path(), &options).unwrap();
@@ -250,6 +254,7 @@ Content here.
         let options = UpgradeOptions {
             dry_run: false,
             with_agent_references: false,
+            interactive: None,
         };
 
         let result = analyze_bloat(temp_file.path(), &options).unwrap();
@@ -280,6 +285,7 @@ Content here.
         let options = UpgradeOptions {
             dry_run: false,
             with_agent_references: false,
+            interactive: None,
         };
 
         let result = analyze_bloat(temp_file.path(), &options).unwrap();

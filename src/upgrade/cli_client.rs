@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::upgrade::claude_client::{ClaudeClient, SectionIntent};
+use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -17,6 +18,7 @@ impl CliClient {
     }
 }
 
+#[async_trait]
 impl ClaudeClient for CliClient {
     async fn analyze_section(
         &self,
@@ -63,7 +65,7 @@ Respond ONLY with valid JSON in this exact format:
             .arg("-p")
             .arg(prompt)
             .output()
-            .map_err(|e| Error::IoError(format!("Failed to execute claude CLI: {}", e)))?;
+            .map_err(|e| Error::ValidationError(format!("Failed to execute claude CLI: {}", e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -100,7 +102,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore] // Requires claude CLI installed
     async fn test_analyze_section_with_cli() {
         // Try to find claude on PATH

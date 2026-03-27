@@ -67,21 +67,26 @@ pub async fn run_async(cmd: &UpgradeCommand) -> Result<(), Error> {
         }
     }
 
-    // INTEGRATION NOTE: The upgrade module is being implemented by another Wave 2 agent.
-    // After merge, uncomment the following lines and remove the temporary error:
-    //
-    // eprintln!("Splitting content...");
-    // eprintln!("Generating script...");
-    // crate::upgrade::upgrade_skill(&cmd.path, &options).await?;
-    // println!("✓ Upgrade complete");
+    // Handle both directory and SKILL.md paths
+    let skill_md_path = if cmd.path.is_dir() {
+        cmd.path.join("SKILL.md")
+    } else {
+        cmd.path.clone()
+    };
 
-    // Temporary placeholder until upgrade module is merged
-    let _ = options; // Suppress unused variable warning
-    let _ = cmd; // Suppress unused variable warning
+    if !skill_md_path.exists() {
+        return Err(Error::ValidationError(format!(
+            "SKILL.md not found at {:?}",
+            skill_md_path
+        )));
+    }
 
-    Err(Error::ValidationError(
-        "Upgrade functionality will be available after Wave 2 upgrade module is merged".to_string(),
-    ))
+    eprintln!("Splitting content...");
+    eprintln!("Generating script...");
+    crate::upgrade::upgrade_skill(&skill_md_path, &options).await?;
+    println!("✓ Upgrade complete");
+
+    Ok(())
 }
 
 #[cfg(test)]

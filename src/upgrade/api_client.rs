@@ -1,20 +1,23 @@
 use crate::error::Error;
 use crate::upgrade::claude_client::{ClaudeClient, SectionIntent};
-use anthropic_sdk::{Client, MessagesRequest};
+use anthropic_sdk::Client;
+use async_trait::async_trait;
+use serde_json::json;
+use std::sync::{Arc, Mutex};
 
 /// API-based Claude client using Anthropic SDK
 pub struct ApiClient {
-    client: Client,
+    api_key: String,
 }
 
 impl ApiClient {
     /// Create a new API client with the provided API key
     pub fn new(api_key: String) -> Self {
-        let client = Client::new(api_key);
-        Self { client }
+        Self { api_key }
     }
 }
 
+#[async_trait]
 impl ClaudeClient for ApiClient {
     async fn analyze_section(
         &self,
@@ -53,43 +56,40 @@ Respond ONLY with valid JSON in this exact format:
 }}"#
         );
 
-        // Call Claude API
-        let request = MessagesRequest {
-            model: "claude-3-haiku-20240307".to_string(),
-            max_tokens: 500,
-            messages: vec![anthropic_sdk::Message {
-                role: "user".to_string(),
-                content: prompt,
-            }],
-            system: None,
-            temperature: None,
-            top_p: None,
-            top_k: None,
-            metadata: None,
-            stop_sequences: None,
-            stream: None,
-        };
+        // Build request using SDK builder pattern
+        let request = Client::new()
+            .auth(&self.api_key)
+            .model("claude-3-haiku-20240307")
+            .messages(&json!([
+                {"role": "user", "content": prompt}
+            ]))
+            .max_tokens(500)
+            .stream(false)
+            .build()
+            .map_err(|e| Error::ApiError(format!("Failed to build request: {}", e)))?;
 
-        let response = self
-            .client
-            .messages(request)
+        // Execute request and collect response
+        let response_text = Arc::new(Mutex::new(String::new()));
+        let response_clone = response_text.clone();
+
+        request
+            .execute(move |text| {
+                let response_clone = response_clone.clone();
+                async move {
+                    let mut response = response_clone.lock().unwrap();
+                    response.push_str(&text);
+                }
+            })
             .await
             .map_err(|e| Error::ApiError(format!("Claude API call failed: {}", e)))?;
 
-        // Extract text from response
-        let response_text = response
-            .content
-            .first()
-            .ok_or_else(|| Error::ApiError("Empty response from Claude API".to_string()))?
-            .text
-            .as_ref()
-            .ok_or_else(|| Error::ApiError("No text in Claude API response".to_string()))?;
+        let final_response = response_text.lock().unwrap().clone();
 
         // Parse JSON response
-        let intent: SectionIntent = serde_json::from_str(response_text).map_err(|e| {
+        let intent: SectionIntent = serde_json::from_str(&final_response).map_err(|e| {
             Error::ApiError(format!(
                 "Failed to parse Claude response as JSON: {}. Response: {}",
-                e, response_text
+                e, final_response
             ))
         })?;
 
@@ -104,11 +104,10 @@ mod tests {
     #[test]
     fn test_api_client_new() {
         let client = ApiClient::new("test-api-key".to_string());
-        // Just verify construction works
-        assert!(std::ptr::addr_of!(client.client) as usize != 0);
+        assert_eq!(client.api_key, "test-api-key");
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore] // Requires live API key in ANTHROPIC_API_KEY env var
     async fn test_analyze_section_command_specific() {
         let api_key = std::env::var("ANTHROPIC_API_KEY")
@@ -128,7 +127,7 @@ mod tests {
         assert!(intent.is_command_specific || intent.is_agent_specific);
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore] // Requires live API key
     async fn test_analyze_section_agent_specific() {
         let api_key = std::env::var("ANTHROPIC_API_KEY")
@@ -147,7 +146,7 @@ mod tests {
         assert!(intent.is_agent_specific);
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore] // Requires live API key
     async fn test_analyze_section_always_loaded() {
         let api_key = std::env::var("ANTHROPIC_API_KEY")

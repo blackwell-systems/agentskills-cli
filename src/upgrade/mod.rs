@@ -1,4 +1,5 @@
-use crate::models::{Error, UpgradeOptions};
+use crate::error::Error;
+use crate::models::{ UpgradeOptions};
 use std::fs;
 use std::path::Path;
 
@@ -53,41 +54,41 @@ pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Resul
 
     // Write updated SKILL.md
     fs::write(skill_path, &split_result.core_content)
-        .map_err(|e| Error::IoError(format!("Failed to write SKILL.md: {}", e)))?;
+        .map_err(|e| Error::ValidationError(format!("Failed to write SKILL.md: {}", e)))?;
 
     // Create references/ directory
     let references_dir = skill_dir.join("references");
     fs::create_dir_all(&references_dir)
-        .map_err(|e| Error::IoError(format!("Failed to create references/ dir: {}", e)))?;
+        .map_err(|e| Error::ValidationError(format!("Failed to create references/ dir: {}", e)))?;
 
     // Write reference files
     for (filename, content) in &split_result.reference_files {
         let ref_path = references_dir.join(filename);
         fs::write(&ref_path, content)
-            .map_err(|e| Error::IoError(format!("Failed to write reference file: {}", e)))?;
+            .map_err(|e| Error::ValidationError(format!("Failed to write reference file: {}", e)))?;
     }
 
     // Create scripts/ directory
     let scripts_dir = skill_dir.join("scripts");
     fs::create_dir_all(&scripts_dir)
-        .map_err(|e| Error::IoError(format!("Failed to create scripts/ dir: {}", e)))?;
+        .map_err(|e| Error::ValidationError(format!("Failed to create scripts/ dir: {}", e)))?;
 
     // Write inject-context script
     if !inject_script.is_empty() {
         let inject_path = scripts_dir.join("inject-context");
         fs::write(&inject_path, inject_script)
-            .map_err(|e| Error::IoError(format!("Failed to write inject-context script: {}", e)))?;
+            .map_err(|e| Error::ValidationError(format!("Failed to write inject-context script: {}", e)))?;
 
         // Set executable permissions (Unix only, no-op on Windows)
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let mut perms = fs::metadata(&inject_path)
-                .map_err(|e| Error::IoError(format!("Failed to read script metadata: {}", e)))?
+                .map_err(|e| Error::ValidationError(format!("Failed to read script metadata: {}", e)))?
                 .permissions();
             perms.set_mode(0o755);
             fs::set_permissions(&inject_path, perms)
-                .map_err(|e| Error::IoError(format!("Failed to set script permissions: {}", e)))?;
+                .map_err(|e| Error::ValidationError(format!("Failed to set script permissions: {}", e)))?;
         }
     }
 
@@ -152,6 +153,7 @@ mod tests {
         let options = UpgradeOptions {
             dry_run: true,
             with_agent_references: false,
+            interactive: None,
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -179,6 +181,7 @@ mod tests {
         let options = UpgradeOptions {
             dry_run: false,
             with_agent_references: false,
+            interactive: None,
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -210,6 +213,7 @@ mod tests {
         let options = UpgradeOptions {
             dry_run: false,
             with_agent_references: false,
+            interactive: None,
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -246,6 +250,7 @@ mod tests {
         let options = UpgradeOptions {
             dry_run: false,
             with_agent_references: false,
+            interactive: None,
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -263,6 +268,7 @@ mod tests {
         let options = UpgradeOptions {
             dry_run: false,
             with_agent_references: false,
+            interactive: None,
         };
 
         let result = upgrade_skill(Path::new("/nonexistent/SKILL.md"), &options).await;

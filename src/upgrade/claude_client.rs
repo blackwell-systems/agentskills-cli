@@ -1,4 +1,5 @@
 use crate::error::Error;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::env;
 
@@ -19,6 +20,7 @@ pub struct SectionIntent {
 /// Implementations:
 /// - ApiClient: Uses Anthropic API SDK
 /// - CliClient: Shells out to `claude` CLI
+#[async_trait]
 pub trait ClaudeClient: Send + Sync {
     /// Analyze a section to determine its routing intent
     ///
@@ -27,11 +29,11 @@ pub trait ClaudeClient: Send + Sync {
     /// - Agent-specific (only for one agent type like wave-agent)
     /// - Conditional (only loaded when prompt matches pattern)
     /// - Always-loaded (core section for all invocations)
-    fn analyze_section(
+    async fn analyze_section(
         &self,
         section_header: &str,
         section_content: &str,
-    ) -> impl std::future::Future<Output = Result<SectionIntent, Error>> + Send;
+    ) -> Result<SectionIntent, Error>;
 }
 
 /// Create a Claude client using auto-detection

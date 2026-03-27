@@ -1,18 +1,4 @@
-/// Routing graph types for progressive disclosure frontmatter generation
-///
-/// These types are implemented by Agent C (Wave 1) in the routing graph builder.
-#[derive(Debug, Clone)]
-pub struct RoutingNode {
-    pub reference_file: String,
-    pub trigger_patterns: Vec<String>,
-    pub agent_types: Vec<String>,
-    pub condition_pattern: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct RoutingGraph {
-    pub nodes: Vec<RoutingNode>,
-}
+use crate::models::RoutingGraph;
 
 /// Generates triggers YAML from routing graph
 ///
