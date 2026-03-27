@@ -3,6 +3,55 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
+use std::fmt;
+
+/// Why a provider detection attempt failed
+#[derive(Debug, Clone)]
+pub enum DetectionFailure {
+    EnvVarMissing(String),
+    EnvVarEmpty(String),
+    BinaryNotFound(String),
+}
+
+impl fmt::Display for DetectionFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DetectionFailure::EnvVarMissing(var) => write!(f, "{} not set", var),
+            DetectionFailure::EnvVarEmpty(var) => write!(f, "{} is empty", var),
+            DetectionFailure::BinaryNotFound(bin) => write!(f, "'{}' not found on PATH", bin),
+        }
+    }
+}
+
+/// Result of provider detection with rich error context
+pub struct DetectionResult {
+    pub analyzer: Option<Box<dyn SemanticAnalyzer>>,
+    pub attempts: Vec<(String, DetectionFailure)>,
+}
+
+impl DetectionResult {
+    /// Create a failed detection result with all attempts
+    fn not_found(attempts: Vec<(String, DetectionFailure)>) -> Self {
+        Self {
+            analyzer: None,
+            attempts,
+        }
+    }
+
+    /// Format a user-friendly error message
+    pub fn error_message(&self) -> String {
+        if self.attempts.is_empty() {
+            return "No semantic analyzer providers configured.".to_string();
+        }
+
+        let mut msg = String::from("No semantic analyzer found. Tried:\n");
+        for (provider, failure) in &self.attempts {
+            msg.push_str(&format!("  - {}: {}\n", provider, failure));
+        }
+        msg.push_str("\nInstall a provider or the tool will use mechanical splitting.");
+        msg
+    }
+}
 
 /// Intent classification for a skill section, determined by semantic analysis
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -50,6 +99,17 @@ enum Provider {
 }
 
 impl Provider {
+    /// Get a human-readable name for this provider
+    fn name(&self) -> &str {
+        match self {
+            Provider::AnthropicApi => "Anthropic API",
+            Provider::AnthropicCli => "Claude CLI",
+            Provider::GeminiApi => "Gemini API",
+            Provider::GeminiCli => "Gemini CLI",
+            Provider::CopilotCli => "Copilot CLI",
+        }
+    }
+
     /// Get the environment variable name for API key (if applicable)
     fn env_var(&self) -> Option<&str> {
         match self {
@@ -70,22 +130,36 @@ impl Provider {
     }
 
     /// Try to create an analyzer instance for this provider
-    fn try_create(&self) -> Option<Box<dyn SemanticAnalyzer>> {
+    /// Returns Ok(analyzer) on success, Err(reason) on failure
+    fn try_create(&self) -> Result<Box<dyn SemanticAnalyzer>, DetectionFailure> {
         match self {
             // API providers: check env var
             Provider::AnthropicApi | Provider::GeminiApi => {
-                let env_var_name = self.env_var()?;
-                let api_key = env::var(env_var_name).ok()?;
+                let env_var_name = self.env_var().ok_or_else(|| {
+                    DetectionFailure::EnvVarMissing("unknown".to_string())
+                })?;
+
+                let api_key = env::var(env_var_name).map_err(|_| {
+                    DetectionFailure::EnvVarMissing(env_var_name.to_string())
+                })?;
+
                 if api_key.trim().is_empty() {
-                    return None;
+                    return Err(DetectionFailure::EnvVarEmpty(env_var_name.to_string()));
                 }
-                Some(self.create_api_client(api_key))
+
+                Ok(self.create_api_client(api_key))
             }
             // CLI providers: check binary on PATH
             Provider::AnthropicCli | Provider::GeminiCli | Provider::CopilotCli => {
-                let cli_name = self.cli_name()?;
-                let cli_path = which::which(cli_name).ok()?;
-                Some(self.create_cli_client(cli_path))
+                let cli_name = self.cli_name().ok_or_else(|| {
+                    DetectionFailure::BinaryNotFound("unknown".to_string())
+                })?;
+
+                let cli_path = which::which(cli_name).map_err(|_| {
+                    DetectionFailure::BinaryNotFound(cli_name.to_string())
+                })?;
+
+                Ok(self.create_cli_client(cli_path))
             }
         }
     }
@@ -120,7 +194,7 @@ impl Provider {
     }
 }
 
-/// Create a semantic analyzer using auto-detection
+/// Create a semantic analyzer using auto-detection with rich error context
 ///
 /// Detection order:
 /// 1. ANTHROPIC_API_KEY env var → AnthropicApi
@@ -130,8 +204,8 @@ impl Provider {
 /// 5. `copilot` binary on PATH → CopilotCli
 /// 6. None → mechanical split fallback
 ///
-/// This supports multiple AgentSkills-compliant providers.
-pub fn new_analyzer() -> Option<Box<dyn SemanticAnalyzer>> {
+/// Returns DetectionResult with either an analyzer or detailed failure reasons.
+pub fn new_analyzer() -> DetectionResult {
     const PROVIDERS: &[Provider] = &[
         Provider::AnthropicApi,
         Provider::AnthropicCli,
@@ -140,13 +214,23 @@ pub fn new_analyzer() -> Option<Box<dyn SemanticAnalyzer>> {
         Provider::CopilotCli,
     ];
 
+    let mut attempts = Vec::new();
+
     for provider in PROVIDERS {
-        if let Some(analyzer) = provider.try_create() {
-            return Some(analyzer);
+        match provider.try_create() {
+            Ok(analyzer) => {
+                return DetectionResult {
+                    analyzer: Some(analyzer),
+                    attempts: vec![], // Success case - no failures to report
+                }
+            }
+            Err(failure) => {
+                attempts.push((provider.name().to_string(), failure));
+            }
         }
     }
 
-    None
+    DetectionResult::not_found(attempts)
 }
 
 #[cfg(test)]
@@ -173,17 +257,22 @@ mod tests {
     #[test]
     fn test_new_analyzer_with_anthropic_api_key() {
         env::set_var("ANTHROPIC_API_KEY", "test-key");
-        let analyzer = new_analyzer();
-        assert!(analyzer.is_some());
+        let result = new_analyzer();
+        assert!(result.analyzer.is_some());
         env::remove_var("ANTHROPIC_API_KEY");
     }
 
     #[test]
     fn test_new_analyzer_with_empty_anthropic_api_key() {
         env::set_var("ANTHROPIC_API_KEY", "   ");
-        let _analyzer = new_analyzer();
-        // Should skip to CLI check (we don't assert result since it depends on PATH)
+        let result = new_analyzer();
+        // Should try other providers after Anthropic API fails with EnvVarEmpty
+        // Final result depends on whether CLI binaries are on PATH
+        // If a CLI succeeds, attempts vec will be empty (success case)
+        // If all fail, attempts vec will have all failures
         env::remove_var("ANTHROPIC_API_KEY");
+        // Just verify it doesn't crash - the result depends on system state
+        let _ = result;
     }
 
     #[test]
@@ -191,12 +280,43 @@ mod tests {
         // Clear Anthropic to test Gemini path
         env::remove_var("ANTHROPIC_API_KEY");
         env::set_var("GOOGLE_API_KEY", "test-gemini-key");
-        let analyzer = new_analyzer();
+        let result = new_analyzer();
         // Result depends on whether claude CLI is on PATH
         // If claude exists, it will be selected first (step 2 beats step 3)
         // If not, Gemini API will be selected
         env::remove_var("GOOGLE_API_KEY");
-        // We can't assert specifics without knowing PATH state
-        let _ = analyzer;
+        // We can't assert specifics without knowing PATH state, but attempts should be tracked
+        let _ = result;
+    }
+
+    #[test]
+    fn test_detection_result_error_message() {
+        // Test error message formatting with mock failures
+        let attempts = vec![
+            (
+                "Test Provider 1".to_string(),
+                DetectionFailure::EnvVarMissing("TEST_KEY".to_string()),
+            ),
+            (
+                "Test Provider 2".to_string(),
+                DetectionFailure::BinaryNotFound("test-bin".to_string()),
+            ),
+        ];
+
+        let result = DetectionResult::not_found(attempts);
+
+        // Should have no analyzer
+        assert!(result.analyzer.is_none());
+
+        // Should have 2 failures
+        assert_eq!(result.attempts.len(), 2);
+
+        // Error message should be formatted correctly
+        let msg = result.error_message();
+        assert!(msg.contains("No semantic analyzer found"));
+        assert!(msg.contains("Test Provider 1"));
+        assert!(msg.contains("TEST_KEY not set"));
+        assert!(msg.contains("Test Provider 2"));
+        assert!(msg.contains("'test-bin' not found on PATH"));
     }
 }

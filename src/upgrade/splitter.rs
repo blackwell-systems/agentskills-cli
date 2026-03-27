@@ -413,8 +413,10 @@ This section is for wave agent only.
         };
 
         // Use analyzer factory (test will be ignored if neither API key nor CLI available)
-        let analyzer = crate::upgrade::semantic_analyzer::new_analyzer();
-        let result = split_content(temp_file.path(), &analysis, analyzer).await.unwrap();
+        let detection = crate::upgrade::semantic_analyzer::new_analyzer();
+        let result = split_content(temp_file.path(), &analysis, detection.analyzer)
+            .await
+            .unwrap();
 
         // Should have generated frontmatter with triggers and agent-references
         assert!(result.core_content.contains("triggers:"));
