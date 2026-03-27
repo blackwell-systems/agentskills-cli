@@ -40,11 +40,10 @@ mod tests {
         SkillMetadata {
             name: name.to_string(),
             description: description.to_string(),
-            triggers: None,
-            agent_references: None,
-            model: None,
-            model_context: None,
-            version: None,
+            license: None,
+            compatibility: None,
+            metadata: None,
+            allowed_tools: None,
             unknown_fields: HashMap::new(),
         }
     }

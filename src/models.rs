@@ -6,17 +6,26 @@ use std::path::Path;
 use std::str::FromStr;
 
 /// Parsed representation of Agent Skill SKILL.md frontmatter
+///
+/// Conforms to the official Agent Skills specification at https://agentskills.io/specification
+///
+/// Fields:
+/// - `name` (required): skill identifier
+/// - `description` (required): what the skill does and when to use it
+/// - `license` (optional): license name or reference
+/// - `compatibility` (optional): environment requirements
+/// - `metadata` (optional): arbitrary key-value map for additional properties
+/// - `allowed_tools` (optional): space-delimited list of pre-approved tools
+/// - `unknown_fields`: captures vendor-specific extensions (triggers, agent-references, model, etc.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillMetadata {
     pub name: String,
     pub description: String,
-    pub triggers: Option<Vec<String>>,
-    #[serde(rename = "agent-references")]
-    pub agent_references: Option<Vec<String>>,
-    pub model: Option<String>,
-    #[serde(rename = "model-context")]
-    pub model_context: Option<String>,
-    pub version: Option<String>,
+    pub license: Option<String>,
+    pub compatibility: Option<String>,
+    pub metadata: Option<HashMap<String, String>>,
+    #[serde(rename = "allowed-tools")]
+    pub allowed_tools: Option<String>,
     #[serde(flatten)]
     pub unknown_fields: HashMap<String, serde_yaml::Value>,
 }
@@ -107,8 +116,9 @@ Some content here.
         let metadata = SkillMetadata::from_str(content).unwrap();
         assert_eq!(metadata.name, "test-skill");
         assert_eq!(metadata.description, "A test skill");
-        assert_eq!(metadata.triggers.as_ref().unwrap().len(), 2);
-        assert_eq!(metadata.version.as_ref().unwrap(), "1.0.0");
+        // triggers and version are now vendor extensions in unknown_fields
+        assert!(metadata.unknown_fields.contains_key("triggers"));
+        assert!(metadata.unknown_fields.contains_key("version"));
     }
 
     #[test]
@@ -124,8 +134,9 @@ Content
         let metadata = SkillMetadata::from_str(content).unwrap();
         assert_eq!(metadata.name, "minimal");
         assert_eq!(metadata.description, "Minimal skill");
-        assert!(metadata.triggers.is_none());
-        assert!(metadata.agent_references.is_none());
+        // No vendor extensions in this minimal skill
+        assert!(!metadata.unknown_fields.contains_key("triggers"));
+        assert!(!metadata.unknown_fields.contains_key("agent-references"));
     }
 
     #[test]
@@ -142,11 +153,14 @@ Content
 "#;
 
         let metadata = SkillMetadata::from_str(content).unwrap();
-        assert_eq!(metadata.agent_references.as_ref().unwrap().len(), 2);
-        assert_eq!(
-            metadata.agent_references.as_ref().unwrap()[0],
-            "references/details.md"
-        );
+        // agent-references is now a vendor extension in unknown_fields
+        assert!(metadata.unknown_fields.contains_key("agent-references"));
+        if let Some(serde_yaml::Value::Sequence(refs)) = metadata.unknown_fields.get("agent-references")
+        {
+            assert_eq!(refs.len(), 2);
+        } else {
+            panic!("agent-references should be a sequence");
+        }
     }
 
     #[test]
@@ -162,8 +176,9 @@ Content
 "#;
 
         let metadata = SkillMetadata::from_str(content).unwrap();
-        assert_eq!(metadata.model.as_ref().unwrap(), "claude-3-opus");
-        assert_eq!(metadata.model_context.as_ref().unwrap(), "extended");
+        // model and model-context are now vendor extensions in unknown_fields
+        assert!(metadata.unknown_fields.contains_key("model"));
+        assert!(metadata.unknown_fields.contains_key("model-context"));
     }
 
     #[test]

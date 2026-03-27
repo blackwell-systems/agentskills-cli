@@ -26,6 +26,14 @@ agentskills upgrade /path/to/skill --dry-run
 agentskills upgrade /path/to/skill --with-agent-references
 ```
 
+## Bundled Skills
+
+The `skills/` directory contains interactive guides that complement the CLI tool:
+
+- **progressive-disclosure-guide**: Interactive skill conversion wizard
+
+See [skills/README.md](skills/README.md) for installation and usage.
+
 ## Development
 
 ```bash
