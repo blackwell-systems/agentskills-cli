@@ -106,7 +106,7 @@ pub struct RoutingGraph {
 pub struct UpgradeOptions {
     pub dry_run: bool,
     pub with_agent_references: bool,
-    pub interactive: bool,
+    pub interactive: Option<bool>,
 }
 
 impl Default for UpgradeOptions {
@@ -114,7 +114,7 @@ impl Default for UpgradeOptions {
         Self {
             dry_run: false,
             with_agent_references: false,
-            interactive: false,
+            interactive: None,
         }
     }
 }
@@ -343,7 +343,7 @@ Content
         let default_options = UpgradeOptions::default();
         assert!(!default_options.dry_run);
         assert!(!default_options.with_agent_references);
-        assert!(!default_options.interactive);
+        assert_eq!(default_options.interactive, None);
     }
 
     #[test]
@@ -354,6 +354,6 @@ Content
         };
         assert!(options.dry_run);
         assert!(!options.with_agent_references);
-        assert!(!options.interactive);
+        assert_eq!(options.interactive, None);
     }
 }
