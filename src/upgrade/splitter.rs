@@ -43,20 +43,58 @@ pub async fn split_content(
     let lines: Vec<&str> = content.lines().collect();
     let mut reference_files = HashMap::new();
 
-    // Step 1: Semantic analysis (if available) to determine timing
-    let sections_with_intent: Vec<(String, String, SectionIntent)> = if let Some(ref analyzer) = analyzer {
+    // Step 1: Find ALL sections (not just suggested splits)
+    let all_sections = {
+        use regex::Regex;
+        let header_regex = Regex::new(r"^##\s+(.+)$").unwrap();
+        let mut sections = Vec::new();
+        let mut current_section: Option<(String, usize)> = None;
+
+        for (idx, line) in lines.iter().enumerate() {
+            if let Some(captures) = header_regex.captures(line) {
+                if let Some((name, start)) = current_section {
+                    sections.push((name, start, idx));
+                }
+                let section_name = captures.get(1).unwrap().as_str().to_string();
+                current_section = Some((section_name, idx));
+            }
+        }
+
+        if let Some((name, start)) = current_section {
+            sections.push((name, start, lines.len()));
+        }
+
+        sections
+    };
+
+    // Step 2: Semantic analysis on ALL sections (if available)
+    let sections_with_intent: Vec<(String, usize, usize, String, SectionIntent)> = if let Some(ref analyzer) = analyzer {
         let mut result = Vec::new();
-        for suggestion in &analysis.suggested_splits {
-            let section_content: String = lines[suggestion.start_line..suggestion.end_line]
-                .join("\n");
+        for (section_name, start_line, end_line) in all_sections {
+            // Skip small sections (< 30 lines) - not worth splitting
+            if end_line - start_line < 30 {
+                continue;
+            }
+
+            let section_content: String = lines[start_line..end_line].join("\n");
 
             let intent = analyzer
-                .analyze_section(&suggestion.section_name, &section_content)
+                .analyze_section(&section_name, &section_content)
                 .await?;
 
+            let target_file = format!(
+                "{}.md",
+                section_name
+                    .to_lowercase()
+                    .replace(' ', "-")
+                    .replace(['(', ')', '/', '\\', ':'], "")
+            );
+
             result.push((
-                suggestion.section_name.clone(),
-                suggestion.target_file.clone(),
+                section_name,
+                start_line,
+                end_line,
+                target_file,
                 intent,
             ));
         }
@@ -65,51 +103,94 @@ pub async fn split_content(
         Vec::new()
     };
 
-    // Step 2: Extract sections to reference files
-    for suggestion in &analysis.suggested_splits {
-        let section_lines: Vec<String> = lines[suggestion.start_line..suggestion.end_line]
+    // Step 3: Extract sections to reference files (both invocation and runtime)
+    for (_section_name, start_line, end_line, target_file, _intent) in &sections_with_intent {
+        let section_lines: Vec<String> = lines[*start_line..*end_line]
             .iter()
             .map(|&s| s.to_string())
             .collect();
 
         // Add dedup marker at the start
-        let dedup_marker = format!("<!-- injected: references/{} -->\n", suggestion.target_file);
+        let dedup_marker = format!("<!-- injected: references/{} -->\n", target_file);
         let reference_content = format!("{}{}", dedup_marker, section_lines.join("\n"));
 
-        reference_files.insert(suggestion.target_file.clone(), reference_content);
+        reference_files.insert(target_file.clone(), reference_content);
     }
 
-    // Step 3: Build core content with runtime breadcrumbs
+    // Also extract bloat analyzer suggestions not covered by semantic analysis
+    for suggestion in &analysis.suggested_splits {
+        // Skip if already handled by semantic analysis
+        let already_handled = sections_with_intent
+            .iter()
+            .any(|(_, start, _, _, _)| *start == suggestion.start_line);
+
+        if !already_handled {
+            let section_lines: Vec<String> = lines[suggestion.start_line..suggestion.end_line]
+                .iter()
+                .map(|&s| s.to_string())
+                .collect();
+
+            let dedup_marker = format!("<!-- injected: references/{} -->\n", suggestion.target_file);
+            let reference_content = format!("{}{}", dedup_marker, section_lines.join("\n"));
+
+            reference_files.insert(suggestion.target_file.clone(), reference_content);
+        }
+    }
+
+    // Step 4: Build core content with runtime breadcrumbs
     let mut core_lines = Vec::new();
     let mut current_idx = 0;
 
-    for (i, suggestion) in analysis.suggested_splits.iter().enumerate() {
-        // Add lines before this section
-        core_lines.extend(lines[current_idx..suggestion.start_line].iter().map(|&s| s.to_string()));
+    // Collect all sections to remove (both from semantic analysis and bloat analyzer)
+    let mut sections_to_process: Vec<(usize, usize, String, String, bool)> = Vec::new();
 
-        // Check if this section has runtime timing
-        let is_runtime = sections_with_intent
-            .get(i)
-            .and_then(|(_, _, intent)| intent.trigger_timing.as_ref())
+    // Add semantically analyzed sections
+    for (section_name, start_line, end_line, target_file, intent) in &sections_with_intent {
+        let is_runtime = intent.trigger_timing.as_ref()
             .map(|timing| matches!(timing, TriggerTiming::Runtime))
             .unwrap_or(false);
+
+        sections_to_process.push((*start_line, *end_line, section_name.clone(), target_file.clone(), is_runtime));
+    }
+
+    // Add bloat analyzer suggestions not already covered
+    for suggestion in &analysis.suggested_splits {
+        let already_handled = sections_to_process
+            .iter()
+            .any(|(start, _, _, _, _)| *start == suggestion.start_line);
+
+        if !already_handled {
+            sections_to_process.push((
+                suggestion.start_line,
+                suggestion.end_line,
+                suggestion.section_name.clone(),
+                suggestion.target_file.clone(),
+                false, // bloat suggestions are invocation-time by default
+            ));
+        }
+    }
+
+    // Sort by start line
+    sections_to_process.sort_by_key(|(start, _, _, _, _)| *start);
+
+    // Build core with breadcrumbs for runtime sections
+    for (start_line, end_line, section_name, target_file, is_runtime) in sections_to_process {
+        // Add lines before this section
+        core_lines.extend(lines[current_idx..start_line].iter().map(|&s| s.to_string()));
 
         if is_runtime {
             // Leave a breadcrumb for runtime sections
             let condition = sections_with_intent
-                .get(i)
-                .and_then(|(_, _, intent)| intent.condition_pattern.as_deref());
+                .iter()
+                .find(|(_, s, _, _, _)| *s == start_line)
+                .and_then(|(_, _, _, _, intent)| intent.condition_pattern.as_deref());
 
-            let breadcrumb = generate_breadcrumb(
-                &suggestion.section_name,
-                &suggestion.target_file,
-                condition,
-            );
+            let breadcrumb = generate_breadcrumb(&section_name, &target_file, condition);
             core_lines.push(breadcrumb);
         }
         // For invocation-time sections, remove entirely (no breadcrumb)
 
-        current_idx = suggestion.end_line;
+        current_idx = end_line;
     }
 
     // Add remaining lines
@@ -117,14 +198,22 @@ pub async fn split_content(
 
     let core_body = core_lines.join("\n");
 
-    // Step 4: Generate frontmatter
+    // Step 5: Generate frontmatter
     let (triggers_yaml, agent_refs_yaml) = if !sections_with_intent.is_empty() {
         // Semantic analysis path
         let subcommands = pattern_detector::extract_subcommands(&content)?;
         let agent_types = pattern_detector::extract_agent_types(&content)?;
 
+        // Convert to format expected by routing_graph::build
+        let routing_input: Vec<(String, String, SectionIntent)> = sections_with_intent
+            .iter()
+            .map(|(_, _, _, target_file, intent)| {
+                (target_file.clone(), String::new(), intent.clone())
+            })
+            .collect();
+
         // Build routing graph from patterns and semantic analysis
-        let routing_graph = crate::upgrade::routing_graph::build(&subcommands, &agent_types, &sections_with_intent);
+        let routing_graph = crate::upgrade::routing_graph::build(&subcommands, &agent_types, &routing_input);
 
         // Generate frontmatter from routing graph
         let triggers = frontmatter_gen::generate_triggers(&routing_graph);
