@@ -1,43 +1,275 @@
 # agentskills-cli
 
-CLI tool for validating and upgrading Agent Skills.
+CLI tool for validating and upgrading [Agent Skills](https://agentskills.io/specification) - portable, LLM-agnostic skill definitions that work across platforms.
+
+## What is this?
+
+Agent Skills is a specification for writing reusable AI agent capabilities. This CLI helps you:
+
+1. **Validate** skills against the official spec
+2. **Upgrade** large skills using progressive disclosure (SAW-quality splitting with semantic routing)
+3. **Detect** vendor extensions and non-standard fields
 
 ## Features
 
-- **Lint**: Validate Agent Skills against base spec and extensions
-- **Upgrade**: Convert skills to progressive disclosure pattern
+### Lint - Spec Validation
 
-## Installation
+Validates Agent Skills against the [base specification](https://agentskills.io/specification) and detects vendor-specific extensions.
 
-```bash
-cargo install --path .
-```
+**What it checks:**
+- Required fields (`name`, `description`)
+- Frontmatter structure and YAML validity
+- Progressive disclosure rules (200-line core, references/ on-demand)
+- Vendor extensions (`triggers`, `agent-references`, `model`, `version`)
+- inject-agent-context script presence and format
 
-## Usage
+**Philosophy:** Warns about non-standard fields without blocking them. Vendor extensions often become spec features - the tool helps you understand your conformance level.
 
 ```bash
 # Validate a skill
-agentskills lint /path/to/skill
+agentskills lint ~/.claude/skills/my-skill
 
-# Upgrade a skill (dry-run)
-agentskills upgrade /path/to/skill --dry-run
-
-# Upgrade with agent-references
-agentskills upgrade /path/to/skill --with-agent-references
+# JSON output for CI/CD
+agentskills lint ~/.claude/skills/my-skill --json
 ```
+
+**Example output:**
+```
+✓ Base spec validation passed
+⚠ Warning: Field 'triggers' is a vendor extension (not in Agent Skills spec)
+⚠ Warning: SKILL.md exceeds 200-line recommendation (347 lines)
+```
+
+### Upgrade - Progressive Disclosure
+
+Transforms large skills into SAW-quality progressive disclosure with semantic analysis and conditional routing.
+
+**What it does:**
+1. **Pattern detection** - Extracts subcommands and agent types from frontmatter
+2. **Semantic analysis** - Uses Claude API to classify section routing intent
+3. **Smart splitting** - Moves detailed content to `references/` loaded on-demand
+4. **Routing generation** - Creates `triggers` and `agent-references` frontmatter
+5. **Script bundling** - Includes production SAW inject-agent-context script
+
+**Three-tier architecture:**
+- **Tier 1:** Metadata (always loaded) - `name`, `description` for skill discovery
+- **Tier 2:** Core instructions (loaded on invocation) - <200 lines, overview + routing
+- **Tier 3:** Reference material (loaded on-demand) - detailed docs, examples, edge cases
+
+```bash
+# Preview changes (recommended first run)
+agentskills upgrade ~/.claude/skills/my-skill --dry-run
+
+# Interactive mode - confirm before applying
+agentskills upgrade ~/.claude/skills/my-skill --interactive
+
+# Automatic upgrade with agent-references support
+agentskills upgrade ~/.claude/skills/my-skill --with-agent-references
+
+# With semantic analysis (requires ANTHROPIC_API_KEY)
+export ANTHROPIC_API_KEY=sk-...
+agentskills upgrade ~/.claude/skills/my-skill --interactive
+```
+
+**Before upgrade:**
+```
+my-skill/
+└── SKILL.md (847 lines - everything in one file)
+```
+
+**After upgrade:**
+```
+my-skill/
+├── SKILL.md (150 lines - core overview + routing)
+├── references/
+│   ├── api-docs.md (loaded when user asks about API)
+│   ├── examples.md (loaded for --examples flag)
+│   └── troubleshooting.md (loaded on error patterns)
+└── scripts/
+    └── inject-agent-context (conditional loading logic)
+```
+
+**Routing example (generated):**
+```yaml
+triggers:
+  - match: "^/skill-name --examples"
+    inject: references/examples.md
+  - match: "error|failed|broken"
+    inject: references/troubleshooting.md
+
+agent-references:
+  - file: references/api-docs.md
+    when:
+      agent_type: "scout"
+```
+
+### Environment Variables
+
+- `ANTHROPIC_API_KEY` - Required for semantic analysis in upgrade command. Without it, falls back to mechanical splitting (section headers only).
+
+## Installation
+
+### From source
+
+```bash
+git clone https://github.com/blackwell-systems/agentskills-cli.git
+cd agentskills-cli
+cargo install --path .
+```
+
+### Requirements
+
+- Rust 1.75+
+- (Optional) Claude API key for semantic analysis
 
 ## Bundled Skills
 
-The `skills/` directory contains interactive guides that complement the CLI tool:
+The `skills/` directory contains interactive guides:
 
-- **progressive-disclosure-guide**: Interactive skill conversion wizard
+- **progressive-disclosure-guide**: Step-by-step wizard for manual skill conversion
 
-See [skills/README.md](skills/README.md) for installation and usage.
+Install to `~/.claude/skills/` and invoke with `/progressive-disclosure-guide <path-to-skill>`.
+
+See [skills/README.md](skills/README.md) for details.
+
+## How Progressive Disclosure Works
+
+### Pattern Detection
+
+Extracts routing patterns from your skill's frontmatter:
+
+```yaml
+# Input (SKILL.md frontmatter)
+argument-hint: "[scout|wave|status] <feature>"
+allowed-tools: Agent(subagent_type=scout), Agent(subagent_type=wave-agent)
+```
+
+Detected patterns:
+- Subcommands: `scout`, `wave`, `status`
+- Agent types: `scout`, `wave-agent`
+
+### Semantic Analysis (with ANTHROPIC_API_KEY)
+
+Classifies each section's routing intent:
+
+```markdown
+## Scout Pre-flight Validation
+
+Before launching a Scout agent, verify...
+```
+
+Analyzed as:
+- `is_agent_specific: true` (mentions "Scout agent")
+- `agent_type: "scout"`
+- `is_command_specific: false`
+
+Generates:
+```yaml
+agent-references:
+  - file: references/scout-validation.md
+    when:
+      agent_type: "scout"
+```
+
+### Mechanical Fallback (no API key)
+
+Without semantic analysis, splits by section headers:
+- Top-level sections stay in core
+- Subsections >50 lines move to references/
+- Cross-references added manually
+
+## Validation Details
+
+### Vendor Extensions
+
+The tool recognizes common vendor-specific fields and validates their format:
+
+| Field | Validation | Spec Status |
+|-------|-----------|-------------|
+| `triggers` | Array of strings, non-empty | Vendor extension (Claude Code) |
+| `agent-references` | Array of objects with `file`, optional `when` | Vendor extension (SAW) |
+| `model` | Non-empty string | Vendor extension (Claude Code) |
+| `version` | Semver format | Vendor extension (suggest `metadata.version`) |
+
+**Why warn instead of error?** These extensions serve real needs (conditional loading, model selection) not yet in the base spec. The tool helps you make informed decisions about portability vs. functionality.
+
+### Progressive Disclosure Rules
+
+Based on empirical context economy research (SAW protocol):
+
+- **200-line core limit** - Keeps skill loading fast, forces focus on essential content
+- **References loaded on-demand** - Detailed docs only when needed (subcommand, agent type, error pattern)
+- **inject-agent-context script** - Required for conditional loading; must have shebang and be executable
 
 ## Development
 
 ```bash
+# Build
 cargo build
+
+# Test
 cargo test
-cargo clippy
+
+# Lint
+cargo clippy -- -D warnings
+
+# Format
+cargo fmt
 ```
+
+### Architecture
+
+```
+src/
+├── commands/       # CLI command handlers (lint, upgrade)
+├── models.rs       # Skill metadata, routing graph, config
+├── validation/     # Spec validators (base, extensions, progressive disclosure)
+└── upgrade/        # Progressive disclosure modules
+    ├── analyzer.rs          # Bloat detection
+    ├── pattern_detector.rs  # Frontmatter extraction
+    ├── semantic_analyzer.rs # Claude API integration
+    ├── routing_graph.rs     # Trigger pattern generation
+    ├── frontmatter_gen.rs   # YAML output
+    ├── splitter.rs          # Content splitting logic
+    └── generator.rs         # Final assembly
+```
+
+## Examples
+
+### Validate before upgrading
+
+```bash
+agentskills lint ~/.claude/skills/my-skill --json | jq '.warnings'
+```
+
+### Upgrade with preview
+
+```bash
+# See what would change
+agentskills upgrade ~/.claude/skills/my-skill --dry-run
+
+# Apply if it looks good
+agentskills upgrade ~/.claude/skills/my-skill --interactive
+```
+
+### CI/CD integration
+
+```bash
+# Fail build if skill is invalid
+agentskills lint skills/production-skill || exit 1
+
+# Check for vendor extensions in pre-commit
+agentskills lint skills/new-skill --json | \
+  jq -e '.warnings | length == 0' || \
+  echo "Warning: skill uses vendor extensions"
+```
+
+## Related Projects
+
+- [Agent Skills Specification](https://agentskills.io/specification) - Official spec
+- [Scout-and-Wave](https://github.com/blackwell-systems/scout-and-wave) - Parallel agent coordination protocol
+- [sawtools](https://github.com/blackwell-systems/sawtools) - SAW CLI orchestrator
+
+## License
+
+MIT
