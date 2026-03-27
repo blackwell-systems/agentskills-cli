@@ -1,8 +1,6 @@
 use crate::error::Error;
 use crate::upgrade::analyzer::BloatAnalysis;
 use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent, TriggerTiming};
-use crate::upgrade::frontmatter_gen;
-use crate::upgrade::pattern_detector;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -198,92 +196,12 @@ pub async fn split_content(
 
     let core_body = core_lines.join("\n");
 
-    // Step 5: Generate frontmatter
-    let (triggers_yaml, agent_refs_yaml) = if !sections_with_intent.is_empty() {
-        // Semantic analysis path
-        let skill_name = pattern_detector::extract_skill_name(&content)?;
-        let subcommands = pattern_detector::extract_subcommands(&content)?;
-        let agent_types = pattern_detector::extract_agent_types(&content)?;
-
-        // Convert to format expected by routing_graph::build
-        let routing_input: Vec<(String, String, SectionIntent)> = sections_with_intent
-            .iter()
-            .map(|(_, _, _, target_file, intent)| {
-                (target_file.clone(), String::new(), intent.clone())
-            })
-            .collect();
-
-        // Build routing graph from patterns and semantic analysis
-        let routing_graph = crate::upgrade::routing_graph::build(&skill_name, &subcommands, &agent_types, &routing_input);
-
-        // Generate frontmatter from routing graph
-        let triggers = frontmatter_gen::generate_triggers(&routing_graph);
-        let agent_refs = frontmatter_gen::generate_agent_references(&routing_graph);
-
-        (triggers, agent_refs)
-    } else {
-        // Mechanical fallback path (original behavior)
-        let triggers = generate_triggers_frontmatter(&analysis.trigger_patterns);
-        let agent_refs = String::new();
-        (triggers, agent_refs)
-    };
-
-    // Generate triggers frontmatter (from mechanical path if no API key)
-    let triggers_yaml_final = if triggers_yaml.is_empty() {
-        generate_triggers_frontmatter(&analysis.trigger_patterns)
-    } else {
-        triggers_yaml
-    };
-
-    // Extract existing frontmatter if present
+    // Step 5: Preserve existing frontmatter
+    // Extract existing frontmatter if present - we keep it unchanged
     let (existing_frontmatter, body_without_frontmatter) = extract_frontmatter(&core_body);
 
-    // Merge frontmatter
-    let mut new_frontmatter = if existing_frontmatter.is_empty() {
-        triggers_yaml_final.clone()
-    } else {
-        // Merge triggers into existing frontmatter
-        merge_frontmatter(&existing_frontmatter, &triggers_yaml_final, analysis)
-    };
-
-    // Add agent-references (from semantic analysis or mechanical fallback)
-    if !agent_refs_yaml.is_empty() {
-        // Semantic analysis generated agent-references
-        new_frontmatter = if new_frontmatter.is_empty() {
-            format!("---\n{}\n---\n", agent_refs_yaml)
-        } else {
-            // Insert before closing ---
-            new_frontmatter = new_frontmatter
-                .trim_end_matches("---\n")
-                .trim_end_matches("---")
-                .to_string();
-            format!("{}{}\n---\n", new_frontmatter, agent_refs_yaml)
-        };
-    } else if analysis.needs_agent_references {
-        // Mechanical fallback: add simple agent-references list
-        let reference_list: Vec<String> = reference_files.keys().cloned().collect();
-        let agent_refs = format!(
-            "agent-references:\n{}",
-            reference_list
-                .iter()
-                .map(|f| format!("  - references/{}", f))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
-
-        new_frontmatter = if new_frontmatter.is_empty() {
-            format!("---\n{}\n---\n", agent_refs)
-        } else {
-            // Insert before closing ---
-            new_frontmatter = new_frontmatter
-                .trim_end_matches("---\n")
-                .trim_end_matches("---")
-                .to_string();
-            format!("{}{}---\n", new_frontmatter, agent_refs)
-        };
-    }
-
-    let core_content = format!("{}{}", new_frontmatter, body_without_frontmatter);
+    // Reassemble with preserved frontmatter
+    let core_content = format!("{}{}", existing_frontmatter, body_without_frontmatter);
 
     Ok(SplitResult {
         core_content,
@@ -303,50 +221,6 @@ fn extract_frontmatter(content: &str) -> (String, String) {
         }
     }
     (String::new(), content.to_string())
-}
-
-/// Merges triggers into existing frontmatter
-fn merge_frontmatter(
-    existing: &str,
-    triggers_yaml: &str,
-    _analysis: &BloatAnalysis,
-) -> String {
-    // Strip delimiters from both
-    let existing_stripped = existing
-        .trim_start_matches("---\n")
-        .trim_start_matches("---")
-        .trim_end_matches("\n---")
-        .trim_end_matches("---");
-
-    let triggers_stripped = triggers_yaml
-        .trim_start_matches("---\n")
-        .trim_start_matches("---")
-        .trim_end_matches("\n---")
-        .trim_end_matches("---");
-
-    // Check if triggers already exist
-    if existing.contains("triggers:") {
-        // Don't duplicate
-        format!("---\n{}---\n", existing_stripped)
-    } else {
-        // Add triggers
-        format!("---\n{}\n{}---\n", existing_stripped, triggers_stripped)
-    }
-}
-
-/// Generates triggers frontmatter YAML
-fn generate_triggers_frontmatter(patterns: &[String]) -> String {
-    if patterns.is_empty() {
-        return String::new();
-    }
-
-    let triggers_list = patterns
-        .iter()
-        .map(|p| format!("  - \"{}\"", p))
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    format!("---\ntriggers:\n{}\n---\n", triggers_list)
 }
 
 #[cfg(test)]
@@ -400,7 +274,7 @@ Content 2
     }
 
     #[tokio::test]
-    async fn test_split_content_adds_triggers_frontmatter() {
+    async fn test_split_content_no_frontmatter_generation() {
         let mut temp_file = NamedTempFile::new().unwrap();
         let content = r#"## Section 1
 
@@ -419,10 +293,9 @@ Content here
 
         let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
 
-        // Should add triggers frontmatter
-        assert!(result.core_content.contains("triggers:"));
-        assert!(result.core_content.contains("\"/test\""));
-        assert!(result.core_content.contains("\"test:\""));
+        // Should NOT add triggers frontmatter (no longer generated)
+        assert!(!result.core_content.contains("triggers:"));
+        assert!(result.core_content.contains("## Section 1"));
     }
 
     #[tokio::test]
@@ -448,15 +321,15 @@ Content here
 
         let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
 
-        // Should preserve name and description
+        // Should preserve name and description exactly as they were
         assert!(result.core_content.contains("name: existing-skill"));
         assert!(result.core_content.contains("description: existing"));
-        // Should add triggers
-        assert!(result.core_content.contains("triggers:"));
+        // Should NOT add triggers (no longer generated)
+        assert!(!result.core_content.contains("triggers:"));
     }
 
     #[tokio::test]
-    async fn test_split_content_adds_agent_references() {
+    async fn test_split_content_extracts_without_frontmatter_modification() {
         let mut temp_file = NamedTempFile::new().unwrap();
         let content = r#"---
 name: test-skill
@@ -485,11 +358,13 @@ Content to extract
 
         let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
 
-        // Should add agent-references field
-        assert!(result.core_content.contains("agent-references:"));
-        assert!(result
-            .core_content
-            .contains("- references/reference-section.md"));
+        // Should preserve original frontmatter unchanged
+        assert!(result.core_content.contains("name: test-skill"));
+        assert!(result.core_content.contains("description: test"));
+        // Should NOT add agent-references field (no longer generated)
+        assert!(!result.core_content.contains("agent-references:"));
+        // Should extract content to references
+        assert!(result.reference_files.contains_key("reference-section.md"));
     }
 
     #[tokio::test]
