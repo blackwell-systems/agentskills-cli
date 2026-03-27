@@ -98,7 +98,6 @@ file_ownership:
       agent: C
       wave: 1
       action: modify
-      note: "Agent C fixes UpgradeOptions construction for backward compatibility. Agent H (Wave 4) will further modify to add --interactive flag parsing."
     - file: src/upgrade/mod.rs
       agent: E
       wave: 2
@@ -691,6 +690,7 @@ waves:
             - src/upgrade/mod.rs
           dependencies:
             - A
+      base_commit: ae65a793eb7b7916cf9916a68d1d063985011d7b
     - number: 3
       agents:
         - id: F
@@ -826,6 +826,7 @@ waves:
             - src/upgrade/generator.rs
           dependencies:
             - D
+      base_commit: 4d2939096294cbf9608351e9ea1f0e7aad60d66f
     - number: 4
       agents:
         - id: H
@@ -905,6 +906,7 @@ waves:
             - src/commands/upgrade.rs
           dependencies:
             - E
+      base_commit: 867ee15f97fb64683099c1874d6a8e696413ac6a
 quality_gates:
     level: standard
     gates:
@@ -984,6 +986,47 @@ completion_reports:
             - test_generate_agent_references_empty_agent_types
             - test_generate_triggers_multiple_patterns_per_node
             - test_generate_agent_references_with_regex_condition
+        verification: PASS
+    E:
+        status: complete
+        branch: saw/agentskills-progressive-disclosure/wave2-agent-E
+        commit: 266e3b7
+        files_changed:
+            - src/upgrade/analyzer.rs
+            - src/upgrade/mod.rs
+        tests_added:
+            - test_analyze_bloat_extracts_patterns
+        verification: PASS
+    F:
+        status: complete
+        branch: saw/agentskills-progressive-disclosure/wave3-agent-F
+        commit: 55a435f
+        files_changed:
+            - src/upgrade/splitter.rs
+            - src/upgrade/mod.rs
+        tests_added:
+            - test_split_content_extracts_sections
+            - test_split_content_adds_triggers_frontmatter
+            - test_split_content_preserves_existing_frontmatter
+            - test_split_content_adds_agent_references
+            - test_split_content_with_routing_graph
+        verification: PASS
+    G:
+        status: complete
+        branch: saw/agentskills-progressive-disclosure/wave3-agent-G
+        commit: b545d427ccddae27e33c954048f8a88e36c3bd63
+        files_changed:
+            - src/upgrade/generator.rs
+        verification: PASS
+    H:
+        status: complete
+        branch: saw/agentskills-progressive-disclosure/wave4-agent-H
+        commit: c535210b908a0966d86ca45575b52029b750499c
+        files_changed:
+            - src/commands/upgrade.rs
+        tests_added:
+            - test_upgrade_command_with_interactive
+            - test_upgrade_options_interactive_field
         verification: PASS
 pre_mortem:
     overall_risk: medium
