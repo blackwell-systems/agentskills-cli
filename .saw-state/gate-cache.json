@@ -1,39 +1,39 @@
 {
   "entries": {
-    "380301a7e81671d51ffb380052f4040d": {
-      "lint": {
-        "gate_type": "lint",
-        "command": "cargo clippy -- -D warnings",
-        "passed": false,
-        "exit_code": 101,
-        "stdout": "",
-        "stderr": "error: could not find `Cargo.toml` in `/Users/dayna.blackwell/code/agentskills-cli` or any parent directory\n",
-        "from_cache": true,
-        "cached_at": "2026-03-26T19:23:58.514709-07:00"
-      }
-    },
-    "5ea3f8d50c98c8433b9f7b200042e1de": {
-      "test": {
-        "gate_type": "test",
-        "command": "cargo test --all",
-        "passed": false,
-        "exit_code": 101,
-        "stdout": "",
-        "stderr": "error: could not find `Cargo.toml` in `/Users/dayna.blackwell/code/agentskills-cli` or any parent directory\n",
-        "from_cache": true,
-        "cached_at": "2026-03-26T19:23:58.664241-07:00"
-      }
-    },
-    "901b9cd1ba418cedc70ce21282143d57": {
+    "026f32021e8088f2020e019de85965b1": {
       "build": {
         "gate_type": "build",
         "command": "cargo build --all",
-        "passed": false,
-        "exit_code": 101,
+        "passed": true,
+        "exit_code": 0,
         "stdout": "",
-        "stderr": "error: could not find `Cargo.toml` in `/Users/dayna.blackwell/code/agentskills-cli` or any parent directory\n",
+        "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s\n",
         "from_cache": true,
-        "cached_at": "2026-03-26T19:23:58.284164-07:00"
+        "cached_at": "2026-03-26T19:39:53.866481-07:00"
+      }
+    },
+    "3ebf2d2940f9de09568b607e3b06e06b": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "cargo clippy -- -D warnings",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s\n",
+        "from_cache": true,
+        "cached_at": "2026-03-26T19:39:54.247603-07:00"
+      }
+    },
+    "6e13fd73426a21d5930b9dbbbc5de894": {
+      "test": {
+        "gate_type": "test",
+        "command": "cargo test --all",
+        "passed": true,
+        "exit_code": 0,
+        "stdout": "\nrunning 19 tests\ntest error::tests::test_add_warning ... ok\ntest error::tests::test_add_error ... ok\ntest error::tests::test_format_output_no_issues ... ok\ntest error::tests::test_is_valid_with_errors ... ok\ntest error::tests::test_format_output_with_errors ... ok\ntest error::tests::test_format_output_with_warnings ... ok\ntest error::tests::test_validation_result_new ... ok\ntest models::tests::test_missing_closing_delimiter ... ok\ntest models::tests::test_missing_frontmatter ... ok\ntest error::tests::test_format_output_mixed ... ok\ntest models::tests::test_empty_name_field ... ok\ntest models::tests::test_parse_valid_frontmatter ... ok\ntest models::tests::test_malformed_yaml ... ok\ntest models::tests::test_parse_minimal_frontmatter ... ok\ntest models::tests::test_parse_with_agent_references ... ok\ntest models::tests::test_empty_description_field ... ok\ntest models::tests::test_parse_with_model_context ... ok\ntest models::tests::test_parse_with_unknown_fields ... ok\ntest models::tests::test_whitespace_only_fields ... ok\n\ntest result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+        "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s\n     Running unittests src/lib.rs (target/debug/deps/agentskills-40eac5bd00212ae4)\n     Running unittests src/main.rs (target/debug/deps/agentskills-6e43f94ff4495144)\n   Doc-tests agentskills\n",
+        "from_cache": true,
+        "cached_at": "2026-03-26T19:39:54.613582-07:00"
       }
     }
   }
