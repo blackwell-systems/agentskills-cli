@@ -110,6 +110,52 @@ pub struct UpgradeOptions {
     pub provider: Option<String>,
 }
 
+/// Preview data structure for --dry-run mode
+/// Contains all computed data that would be written to disk
+#[derive(Debug, Clone)]
+pub struct PreviewData {
+    pub total_lines: usize,
+    pub core_lines_after: usize,
+    pub sections: Vec<SectionPreview>,
+    pub reference_files: Vec<ReferenceFilePreview>,
+    pub breadcrumbs: Vec<BreadcrumbPreview>,
+}
+
+/// Preview of a section that will be extracted
+#[derive(Debug, Clone)]
+pub struct SectionPreview {
+    pub name: String,
+    pub line_range: (usize, usize),
+    pub target_file: String,
+    pub timing: SectionTiming,
+}
+
+/// Timing classification for a section
+#[derive(Debug, Clone, PartialEq)]
+pub enum SectionTiming {
+    /// Loaded at skill invocation time
+    Invocation,
+    /// Loaded during execution (runtime branch)
+    Runtime,
+    /// No semantic analysis performed
+    Unknown,
+}
+
+/// Preview of a reference file that will be created
+#[derive(Debug, Clone)]
+pub struct ReferenceFilePreview {
+    pub filename: String,
+    pub line_count: usize,
+}
+
+/// Preview of a breadcrumb that will be left in core
+#[derive(Debug, Clone)]
+pub struct BreadcrumbPreview {
+    pub section_name: String,
+    pub target_file: String,
+    pub condition: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
