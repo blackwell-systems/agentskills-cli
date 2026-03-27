@@ -22,6 +22,7 @@ pub fn run(cmd: &UpgradeCommand) -> Result<(), Error> {
     let options = UpgradeOptions {
         dry_run: cmd.dry_run,
         with_agent_references: cmd.with_agent_references,
+        ..Default::default()
     };
 
     // Print progress to stderr
