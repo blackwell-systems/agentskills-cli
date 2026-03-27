@@ -2,6 +2,8 @@
 
 CLI for validating and upgrading [Agent Skills](https://agentskills.io/specification): enforce spec compliance, convert large skills into progressive disclosure, and detect vendor extensions.
 
+The official validator checks strict base-spec conformance. `agentskills-cli` is designed for real-world skills: it validates the base spec, detects vendor extensions without breaking on them, and helps migrate large or vendor-shaped skills toward portable progressive disclosure.
+
 ## Core capabilities
 
 Agent Skills defines a portable format for reusable AI agent capabilities.
@@ -32,7 +34,7 @@ Validates Agent Skills against the [base specification](https://agentskills.io/s
 - Vendor extensions (`triggers`, `agent-references`, `model`, `version`)
 - inject-agent-context script presence and format
 
-**Philosophy:** Warns about non-standard fields without blocking them. Vendor extensions often become spec features - the tool helps you understand your conformance level.
+**Philosophy:** Warns about non-standard fields without blocking on them. This is ecosystem-aware validation - vendor extensions serve real needs (conditional loading, model selection) and often become spec features. The tool helps you understand your conformance level and portability tradeoffs, not just pass/fail.
 
 ```bash
 # Validate a skill
