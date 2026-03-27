@@ -1,0 +1,1 @@
+/Users/dayna.blackwell/code/agentskills-cli/.claude/worktrees/saw/agentskills-cli/wave1-agent-D/target/debug/libagentskills.rlib: /Users/dayna.blackwell/code/agentskills-cli/.claude/worktrees/saw/agentskills-cli/wave1-agent-D/src/lib.rs
