@@ -136,8 +136,8 @@ mod tests {
     use std::io::Write;
     use tempfile::TempDir;
 
-    #[test]
-    fn test_upgrade_skill_dry_run_does_not_write() {
+    #[tokio::test]
+    async fn test_upgrade_skill_dry_run_does_not_write() {
         let temp_dir = TempDir::new().unwrap();
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
@@ -152,7 +152,7 @@ mod tests {
             with_agent_references: false,
         };
 
-        let result = upgrade_skill(&skill_path, &options);
+        let result = upgrade_skill(&skill_path, &options).await;
         assert!(result.is_ok());
 
         // Should not create references/ or scripts/
@@ -160,8 +160,8 @@ mod tests {
         assert!(!temp_dir.path().join("scripts").exists());
     }
 
-    #[test]
-    fn test_upgrade_skill_creates_directory_structure() {
+    #[tokio::test]
+    async fn test_upgrade_skill_creates_directory_structure() {
         let temp_dir = TempDir::new().unwrap();
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
@@ -179,7 +179,7 @@ mod tests {
             with_agent_references: false,
         };
 
-        let result = upgrade_skill(&skill_path, &options);
+        let result = upgrade_skill(&skill_path, &options).await;
         assert!(result.is_ok());
 
         // Should create references/ and scripts/
@@ -192,8 +192,8 @@ mod tests {
             .exists());
     }
 
-    #[test]
-    fn test_upgrade_skill_writes_reference_files() {
+    #[tokio::test]
+    async fn test_upgrade_skill_writes_reference_files() {
         let temp_dir = TempDir::new().unwrap();
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
@@ -210,7 +210,7 @@ mod tests {
             with_agent_references: false,
         };
 
-        let result = upgrade_skill(&skill_path, &options);
+        let result = upgrade_skill(&skill_path, &options).await;
         assert!(result.is_ok());
 
         // Should create reference file
@@ -225,9 +225,9 @@ mod tests {
         assert!(ref_content.starts_with("<!-- injected: references/implementation-steps.md -->"));
     }
 
-    #[test]
+    #[tokio::test]
     #[cfg(unix)]
-    fn test_upgrade_skill_sets_script_executable() {
+    async fn test_upgrade_skill_sets_script_executable() {
         use std::os::unix::fs::PermissionsExt;
 
         let temp_dir = TempDir::new().unwrap();
@@ -246,7 +246,7 @@ mod tests {
             with_agent_references: false,
         };
 
-        let result = upgrade_skill(&skill_path, &options);
+        let result = upgrade_skill(&skill_path, &options).await;
         assert!(result.is_ok());
 
         // Check script is executable
@@ -256,14 +256,14 @@ mod tests {
         assert_eq!(permissions.mode() & 0o111, 0o111); // At least user-executable
     }
 
-    #[test]
-    fn test_upgrade_skill_validates_path() {
+    #[tokio::test]
+    async fn test_upgrade_skill_validates_path() {
         let options = UpgradeOptions {
             dry_run: false,
             with_agent_references: false,
         };
 
-        let result = upgrade_skill(Path::new("/nonexistent/SKILL.md"), &options);
+        let result = upgrade_skill(Path::new("/nonexistent/SKILL.md"), &options).await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::ValidationError(_)));
     }
