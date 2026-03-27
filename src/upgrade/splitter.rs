@@ -1,5 +1,9 @@
 use crate::models::Error;
 use crate::upgrade::analyzer::BloatAnalysis;
+use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
+use crate::upgrade::routing_graph::RoutingGraph;
+use crate::upgrade::frontmatter_gen;
+use crate::upgrade::pattern_detector;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -13,9 +17,10 @@ pub struct SplitResult {
 }
 
 /// Splits SKILL.md based on BloatAnalysis
-pub fn split_content(
+pub async fn split_content(
     skill_path: &Path,
     analysis: &BloatAnalysis,
+    api_key: Option<String>,
 ) -> Result<SplitResult, Error> {
     let content = fs::read_to_string(skill_path)
         .map_err(|e| Error::IoError(format!("Failed to read SKILL.md: {}", e)))?;
@@ -62,22 +67,80 @@ pub fn split_content(
 
     let core_body = core_lines.join("\n");
 
-    // Generate triggers frontmatter
-    let triggers_yaml = generate_triggers_frontmatter(&analysis.trigger_patterns);
+    // Generate triggers and agent-references frontmatter
+    let (triggers_yaml, agent_refs_yaml) = if let Some(key) = api_key {
+        // Semantic analysis path with Claude API
+        let analyzer = SemanticAnalyzer::new(key);
+
+        // Extract subcommands and agent types from original content
+        let subcommands = pattern_detector::extract_subcommands(&content)?;
+        let agent_types = pattern_detector::extract_agent_types(&content)?;
+
+        // Analyze each split section semantically
+        let mut sections_with_intent: Vec<(String, String, SectionIntent)> = Vec::new();
+        for suggestion in &analysis.suggested_splits {
+            let section_content: String = lines[suggestion.start_line..suggestion.end_line]
+                .join("\n");
+
+            let intent = analyzer
+                .analyze_section(&suggestion.section_name, &section_content)
+                .await?;
+
+            sections_with_intent.push((
+                suggestion.section_name.clone(),
+                suggestion.target_file.clone(),
+                intent,
+            ));
+        }
+
+        // Build routing graph from patterns and semantic analysis
+        let routing_graph = routing_graph::build(&subcommands, &agent_types, &sections_with_intent);
+
+        // Generate frontmatter from routing graph
+        let triggers = frontmatter_gen::generate_triggers(&routing_graph);
+        let agent_refs = frontmatter_gen::generate_agent_references(&routing_graph);
+
+        (triggers, agent_refs)
+    } else {
+        // Mechanical fallback path (original behavior)
+        let triggers = generate_triggers_frontmatter(&analysis.trigger_patterns);
+        let agent_refs = String::new();
+        (triggers, agent_refs)
+    };
+
+    // Generate triggers frontmatter (from mechanical path if no API key)
+    let triggers_yaml_final = if triggers_yaml.is_empty() {
+        generate_triggers_frontmatter(&analysis.trigger_patterns)
+    } else {
+        triggers_yaml
+    };
 
     // Extract existing frontmatter if present
     let (existing_frontmatter, body_without_frontmatter) = extract_frontmatter(&core_body);
 
     // Merge frontmatter
     let mut new_frontmatter = if existing_frontmatter.is_empty() {
-        triggers_yaml.clone()
+        triggers_yaml_final.clone()
     } else {
         // Merge triggers into existing frontmatter
-        merge_frontmatter(&existing_frontmatter, &triggers_yaml, analysis)
+        merge_frontmatter(&existing_frontmatter, &triggers_yaml_final, analysis)
     };
 
-    // Add agent-references if needed
-    if analysis.needs_agent_references {
+    // Add agent-references (from semantic analysis or mechanical fallback)
+    if !agent_refs_yaml.is_empty() {
+        // Semantic analysis generated agent-references
+        new_frontmatter = if new_frontmatter.is_empty() {
+            format!("---\n{}\n---\n", agent_refs_yaml)
+        } else {
+            // Insert before closing ---
+            new_frontmatter = new_frontmatter
+                .trim_end_matches("---\n")
+                .trim_end_matches("---")
+                .to_string();
+            format!("{}{}\n---\n", new_frontmatter, agent_refs_yaml)
+        };
+    } else if analysis.needs_agent_references {
+        // Mechanical fallback: add simple agent-references list
         let reference_list: Vec<String> = reference_files.keys().cloned().collect();
         let agent_refs = format!(
             "agent-references:\n{}",
@@ -173,8 +236,8 @@ mod tests {
     use std::io::Write;
     use tempfile::NamedTempFile;
 
-    #[test]
-    fn test_split_content_extracts_sections() {
+    #[tokio::test]
+    async fn test_split_content_extracts_sections() {
         let mut temp_file = NamedTempFile::new().unwrap();
         let content = r#"---
 name: test-skill
@@ -203,7 +266,7 @@ Content 2
             needs_agent_references: false,
         };
 
-        let result = split_content(temp_file.path(), &analysis).unwrap();
+        let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
 
         // Should have one reference file
         assert_eq!(result.reference_files.len(), 1);
@@ -214,8 +277,8 @@ Content 2
         assert!(ref_content.starts_with("<!-- injected: references/section-1.md -->"));
     }
 
-    #[test]
-    fn test_split_content_adds_triggers_frontmatter() {
+    #[tokio::test]
+    async fn test_split_content_adds_triggers_frontmatter() {
         let mut temp_file = NamedTempFile::new().unwrap();
         let content = r#"## Section 1
 
@@ -230,7 +293,7 @@ Content here
             needs_agent_references: false,
         };
 
-        let result = split_content(temp_file.path(), &analysis).unwrap();
+        let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
 
         // Should add triggers frontmatter
         assert!(result.core_content.contains("triggers:"));
@@ -238,8 +301,8 @@ Content here
         assert!(result.core_content.contains("\"test:\""));
     }
 
-    #[test]
-    fn test_split_content_preserves_existing_frontmatter() {
+    #[tokio::test]
+    async fn test_split_content_preserves_existing_frontmatter() {
         let mut temp_file = NamedTempFile::new().unwrap();
         let content = r#"---
 name: existing-skill
@@ -257,7 +320,7 @@ Content here
             needs_agent_references: false,
         };
 
-        let result = split_content(temp_file.path(), &analysis).unwrap();
+        let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
 
         // Should preserve name and description
         assert!(result.core_content.contains("name: existing-skill"));
@@ -266,8 +329,8 @@ Content here
         assert!(result.core_content.contains("triggers:"));
     }
 
-    #[test]
-    fn test_split_content_adds_agent_references() {
+    #[tokio::test]
+    async fn test_split_content_adds_agent_references() {
         let mut temp_file = NamedTempFile::new().unwrap();
         let content = r#"---
 name: test-skill
@@ -292,12 +355,67 @@ Content to extract
             needs_agent_references: true,
         };
 
-        let result = split_content(temp_file.path(), &analysis).unwrap();
+        let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
 
         // Should add agent-references field
         assert!(result.core_content.contains("agent-references:"));
         assert!(result
             .core_content
             .contains("- references/reference-section.md"));
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires ANTHROPIC_API_KEY
+    async fn test_split_content_with_routing_graph() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let content = r#"---
+name: test-skill
+description: test
+argument-hint: "/test [scout|wave]"
+allowed-tools: Agent(subagent_type=scout)
+---
+
+## Scout Section
+
+This section is for scout agent only.
+
+## Wave Section
+
+This section is for wave agent only.
+"#;
+        temp_file.write_all(content.as_bytes()).unwrap();
+
+        let analysis = BloatAnalysis {
+            total_lines: 15,
+            suggested_splits: vec![
+                SplitSuggestion {
+                    section_name: "Scout Section".to_string(),
+                    start_line: 7,
+                    end_line: 10,
+                    target_file: "scout-section.md".to_string(),
+                },
+                SplitSuggestion {
+                    section_name: "Wave Section".to_string(),
+                    start_line: 11,
+                    end_line: 14,
+                    target_file: "wave-section.md".to_string(),
+                },
+            ],
+            trigger_patterns: vec!["/test".to_string()],
+            needs_agent_references: true,
+        };
+
+        // Read API key from environment (test will be ignored if not set)
+        let api_key = std::env::var("ANTHROPIC_API_KEY").ok();
+        let result = split_content(temp_file.path(), &analysis, api_key).await.unwrap();
+
+        // Should have generated frontmatter with triggers and agent-references
+        assert!(result.core_content.contains("triggers:"));
+        assert!(result.core_content.contains("agent-references:"));
+
+        // Should have reference files
+        assert_eq!(result.reference_files.len(), 2);
+        assert!(result.reference_files.contains_key("scout-section.md"));
+        assert!(result.reference_files.contains_key("wave-section.md"));
     }
 }
