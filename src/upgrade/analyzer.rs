@@ -163,7 +163,7 @@ mod tests {
         };
 
         let result = analyze_bloat(temp_file.path(), &options).unwrap();
-        assert_eq!(result.total_lines, 254); // 4 frontmatter lines + 250 content lines
+        assert_eq!(result.total_lines, 255); // 4 frontmatter lines + 1 empty line + 250 content lines
     }
 
     #[test]
@@ -245,7 +245,7 @@ Content here.
 name: test-skill
 description: test
 argument-hint: "/test [scout|wave|status]"
-allowed-tools: ["Agent(subagent_type=wave-agent)", "Agent(subagent_type=scout)"]
+allowed-tools: "Agent(subagent_type=wave-agent) Agent(subagent_type=scout)"
 ---
 
 Content here.

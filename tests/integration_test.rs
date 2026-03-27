@@ -36,6 +36,7 @@ fn create_bloated_skill(dir: &TempDir) -> std::path::PathBuf {
     writeln!(file, "---").unwrap();
     writeln!(file, "name: bloated-skill").unwrap();
     writeln!(file, "description: A skill that needs upgrading").unwrap();
+    writeln!(file, "argument-hint: bloated").unwrap();
     writeln!(file, "---").unwrap();
     writeln!(file).unwrap();
     writeln!(file, "# Bloated Skill").unwrap();
@@ -110,13 +111,11 @@ fn test_upgrade_dry_run_no_files_written() {
     let mut cmd = Command::cargo_bin("agentskills").unwrap();
     cmd.arg("upgrade").arg(&skill_path).arg("--dry-run");
 
-    // NOTE: Upgrade module exists but is not exported in lib.rs (out of scope for this agent).
-    // When lib.rs adds `pub mod upgrade;`, these tests should be updated to expect success.
     cmd.assert()
-        .failure()
-        .stderr(predicate::str::contains("Upgrade functionality"));
+        .success()
+        .stdout(predicate::str::contains("Upgrade complete"));
 
-    // Verify no files were created (correct behavior for current state)
+    // Verify no files were created in dry-run mode
     assert!(!temp_dir.path().join("references").exists());
     assert!(!temp_dir.path().join("scripts").exists());
 }
@@ -129,11 +128,13 @@ fn test_upgrade_creates_directory_structure() {
     let mut cmd = Command::cargo_bin("agentskills").unwrap();
     cmd.arg("upgrade").arg(&skill_path);
 
-    // NOTE: Upgrade module exists but is not exported in lib.rs (out of scope for this agent).
-    // When lib.rs adds `pub mod upgrade;`, this test should be updated to expect success.
     cmd.assert()
-        .failure()
-        .stderr(predicate::str::contains("Upgrade functionality"));
+        .success()
+        .stdout(predicate::str::contains("Upgrade complete"));
+
+    // Verify directories were created
+    assert!(temp_dir.path().join("references").exists());
+    assert!(temp_dir.path().join("scripts").exists());
 }
 
 #[test]
@@ -146,11 +147,9 @@ fn test_upgrade_with_agent_references_flag() {
         .arg(&skill_path)
         .arg("--with-agent-references");
 
-    // NOTE: Upgrade module exists but is not exported in lib.rs (out of scope for this agent).
-    // When lib.rs adds `pub mod upgrade;`, this test should be updated to expect success.
     cmd.assert()
-        .failure()
-        .stderr(predicate::str::contains("Upgrade functionality"));
+        .success()
+        .stdout(predicate::str::contains("Upgrade complete"));
 }
 
 #[test]

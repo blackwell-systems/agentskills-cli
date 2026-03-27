@@ -58,10 +58,9 @@ Respond ONLY with valid JSON in this exact format:
         );
 
         // Shell out to claude CLI
-        // Use --print (no tool execution), --quiet (no startup messages)
+        // Use --print (no tool execution)
         let output = Command::new(&self.claude_path)
             .arg("--print")
-            .arg("--quiet")
             .arg("-p")
             .arg(prompt)
             .output()
@@ -75,9 +74,14 @@ Respond ONLY with valid JSON in this exact format:
             )));
         }
 
-        // Parse stdout as JSON
+        // Parse stdout as JSON (strip markdown code fences if present)
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let intent: SectionIntent = serde_json::from_str(&stdout).map_err(|e| {
+        let json_str = stdout.trim()
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+        let intent: SectionIntent = serde_json::from_str(json_str).map_err(|e| {
             Error::ApiError(format!(
                 "Failed to parse claude CLI response as JSON: {}. Response: {}",
                 e, stdout

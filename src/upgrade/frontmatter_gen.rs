@@ -1,4 +1,6 @@
 use crate::models::RoutingGraph;
+#[cfg(test)]
+use crate::models::RoutingNode;
 
 /// Generates triggers YAML from routing graph
 ///

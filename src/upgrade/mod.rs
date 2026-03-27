@@ -171,7 +171,7 @@ mod tests {
         let mut file = fs::File::create(&skill_path).unwrap();
 
         // Create content with a section that should be split
-        let mut content = String::from("---\nname: test-skill\ndescription: test\n---\n\n");
+        let mut content = String::from("---\nname: test-skill\ndescription: test\nargument-hint: test\n---\n\n");
         content.push_str("## Reference Section\n\n");
         for i in 0..60 {
             content.push_str(&format!("Line {}\n", i));
@@ -203,7 +203,7 @@ mod tests {
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
 
-        let mut content = String::from("---\nname: test-skill\ndescription: test\n---\n\n");
+        let mut content = String::from("---\nname: test-skill\ndescription: test\nargument-hint: test\n---\n\n");
         content.push_str("## Implementation Steps\n\n");
         for i in 0..60 {
             content.push_str(&format!("Step {}\n", i));
@@ -240,7 +240,7 @@ mod tests {
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
 
-        let mut content = String::from("---\nname: test-skill\ndescription: test\n---\n\n");
+        let mut content = String::from("---\nname: test-skill\ndescription: test\nargument-hint: test\n---\n\n");
         content.push_str("## Reference Section\n\n");
         for i in 0..60 {
             content.push_str(&format!("Line {}\n", i));
