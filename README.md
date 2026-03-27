@@ -14,6 +14,16 @@ This CLI is the enforcement and migration layer for that ecosystem. It validates
 - Upgrade large skills into progressive disclosure (intelligent splitting with semantic routing)
 - Detect vendor extensions and non-standard fields
 
+## Why a CLI instead of a skill?
+
+A skill can help you design progressive disclosure. This CLI implements it.
+
+Progressive disclosure is a structural concern: it determines what enters the model's context and when. Doing that work at runtime requires loading and reasoning about large skills inside the model itself.
+
+This CLI moves that work to build time. It analyzes, restructures, and generates routing ahead of execution, producing deterministic, reusable artifacts that never require the model to process the full skill again.
+
+In practice: skills run at runtime. This tool shapes them before they ever run.
+
 ## When to use this
 
 - You have an Agent Skill and want to validate it against the spec
