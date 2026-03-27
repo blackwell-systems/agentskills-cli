@@ -2,7 +2,7 @@
 
 CLI for validating and upgrading [Agent Skills](https://agentskills.io/specification): enforce spec compliance, convert large skills into progressive disclosure, and detect vendor extensions.
 
-The official validator checks strict base-spec conformance. `agentskills-cli` is designed for real-world skills: it validates the base spec, detects vendor extensions without breaking on them, and helps migrate large or vendor-shaped skills toward portable progressive disclosure.
+The official validator checks strict base-spec conformance. `agentskills-cli` is designed for real-world skills: it validates the base spec, detects vendor extensions without breaking on them, and helps migrate large or vendor-specific skills toward portable progressive disclosure.
 
 ## Core capabilities
 
