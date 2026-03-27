@@ -129,11 +129,21 @@ The `upgrade` command's semantic analysis supports multiple AgentSkills-complian
 
 1. **Anthropic API** - Set `ANTHROPIC_API_KEY` environment variable
 2. **Claude CLI** - Have `claude` command available on PATH (Max plan users)
-3. **Gemini API** - Set `GOOGLE_API_KEY` environment variable
-4. **Gemini CLI** - Have `gemini` command available on PATH
-5. **GitHub Copilot CLI** - Have `copilot` command available on PATH (Copilot subscription)
+3. **OpenAI API** - Set `OPENAI_API_KEY` environment variable
+4. **Gemini API** - Set `GOOGLE_API_KEY` environment variable
+5. **Gemini CLI** - Have `gemini` command available on PATH
+6. **GitHub Copilot CLI** - Have `copilot` command available on PATH (Copilot subscription)
 
 Without any provider, the tool falls back to mechanical splitting (section headers only).
+
+**Override provider selection:**
+```bash
+# Force a specific provider instead of auto-detection
+agentskills upgrade <skill-path> --provider openai-api
+agentskills upgrade <skill-path> --provider copilot-cli
+
+# Valid provider names: anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli
+```
 
 ## Installation
 
@@ -148,7 +158,7 @@ cargo install --path .
 ### Requirements
 
 - Rust 1.75+
-- (Optional) LLM provider for semantic analysis: Anthropic (API/CLI), Google Gemini (API/CLI), or GitHub Copilot (CLI)
+- (Optional) LLM provider for semantic analysis: Anthropic (API/CLI), OpenAI (API), Google Gemini (API/CLI), or GitHub Copilot (CLI)
 
 ## Bundled Skills
 

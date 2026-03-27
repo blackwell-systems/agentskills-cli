@@ -93,6 +93,7 @@ pub trait SemanticAnalyzer: Send + Sync {
 enum Provider {
     AnthropicApi,
     AnthropicCli,
+    OpenAiApi,
     GeminiApi,
     GeminiCli,
     CopilotCli,
@@ -104,6 +105,7 @@ impl Provider {
         match self {
             Provider::AnthropicApi => "Anthropic API",
             Provider::AnthropicCli => "Claude CLI",
+            Provider::OpenAiApi => "OpenAI API",
             Provider::GeminiApi => "Gemini API",
             Provider::GeminiCli => "Gemini CLI",
             Provider::CopilotCli => "Copilot CLI",
@@ -114,6 +116,7 @@ impl Provider {
     fn env_var(&self) -> Option<&str> {
         match self {
             Provider::AnthropicApi => Some("ANTHROPIC_API_KEY"),
+            Provider::OpenAiApi => Some("OPENAI_API_KEY"),
             Provider::GeminiApi => Some("GOOGLE_API_KEY"),
             _ => None,
         }
@@ -134,7 +137,7 @@ impl Provider {
     fn try_create(&self) -> Result<Box<dyn SemanticAnalyzer>, DetectionFailure> {
         match self {
             // API providers: check env var
-            Provider::AnthropicApi | Provider::GeminiApi => {
+            Provider::AnthropicApi | Provider::OpenAiApi | Provider::GeminiApi => {
                 let env_var_name = self.env_var().ok_or_else(|| {
                     DetectionFailure::EnvVarMissing("unknown".to_string())
                 })?;
@@ -170,6 +173,9 @@ impl Provider {
             Provider::AnthropicApi => {
                 Box::new(crate::upgrade::anthropic_api::AnthropicApi::new(api_key))
             }
+            Provider::OpenAiApi => {
+                Box::new(crate::upgrade::openai_api::OpenAiApi::new(api_key))
+            }
             Provider::GeminiApi => {
                 Box::new(crate::upgrade::gemini_api::GeminiApi::new(api_key))
             }
@@ -199,16 +205,18 @@ impl Provider {
 /// Detection order:
 /// 1. ANTHROPIC_API_KEY env var → AnthropicApi
 /// 2. `claude` binary on PATH → AnthropicCli
-/// 3. GOOGLE_API_KEY env var → GeminiApi
-/// 4. `gemini` binary on PATH → GeminiCli
-/// 5. `copilot` binary on PATH → CopilotCli
-/// 6. None → mechanical split fallback
+/// 3. OPENAI_API_KEY env var → OpenAiApi
+/// 4. GOOGLE_API_KEY env var → GeminiApi
+/// 5. `gemini` binary on PATH → GeminiCli
+/// 6. `copilot` binary on PATH → CopilotCli
+/// 7. None → mechanical split fallback
 ///
 /// Returns DetectionResult with either an analyzer or detailed failure reasons.
 pub fn new_analyzer() -> DetectionResult {
     const PROVIDERS: &[Provider] = &[
         Provider::AnthropicApi,
         Provider::AnthropicCli,
+        Provider::OpenAiApi,
         Provider::GeminiApi,
         Provider::GeminiCli,
         Provider::CopilotCli,
@@ -231,6 +239,51 @@ pub fn new_analyzer() -> DetectionResult {
     }
 
     DetectionResult::not_found(attempts)
+}
+
+/// Create a semantic analyzer for a specific provider by name
+///
+/// Provider names:
+/// - "anthropic-api" → AnthropicApi (requires ANTHROPIC_API_KEY)
+/// - "claude-cli" → AnthropicCli (requires `claude` binary)
+/// - "openai-api" → OpenAiApi (requires OPENAI_API_KEY)
+/// - "gemini-api" → GeminiApi (requires GOOGLE_API_KEY)
+/// - "gemini-cli" → GeminiCli (requires `gemini` binary)
+/// - "copilot-cli" → CopilotCli (requires `copilot` binary)
+///
+/// Returns DetectionResult with either an analyzer or the failure reason.
+pub fn new_analyzer_by_name(provider_name: &str) -> DetectionResult {
+    let provider = match provider_name.to_lowercase().as_str() {
+        "anthropic-api" => Provider::AnthropicApi,
+        "claude-cli" => Provider::AnthropicCli,
+        "openai-api" => Provider::OpenAiApi,
+        "gemini-api" => Provider::GeminiApi,
+        "gemini-cli" => Provider::GeminiCli,
+        "copilot-cli" => Provider::CopilotCli,
+        _ => {
+            return DetectionResult {
+                analyzer: None,
+                attempts: vec![(
+                    provider_name.to_string(),
+                    DetectionFailure::BinaryNotFound(format!(
+                        "Unknown provider '{}'. Valid: anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli",
+                        provider_name
+                    )),
+                )],
+            };
+        }
+    };
+
+    match provider.try_create() {
+        Ok(analyzer) => DetectionResult {
+            analyzer: Some(analyzer),
+            attempts: vec![],
+        },
+        Err(failure) => DetectionResult {
+            analyzer: None,
+            attempts: vec![(provider.name().to_string(), failure)],
+        },
+    }
 }
 
 #[cfg(test)]

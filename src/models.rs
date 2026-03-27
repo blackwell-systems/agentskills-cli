@@ -107,6 +107,7 @@ pub struct UpgradeOptions {
     pub dry_run: bool,
     pub with_agent_references: bool,
     pub interactive: Option<bool>,
+    pub provider: Option<String>,
 }
 
 #[cfg(test)]

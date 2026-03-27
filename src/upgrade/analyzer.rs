@@ -160,6 +160,7 @@ mod tests {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
+            ..Default::default()
         };
 
         let result = analyze_bloat(temp_file.path(), &options).unwrap();
@@ -191,6 +192,7 @@ This is a small section.
             dry_run: false,
             with_agent_references: false,
             interactive: None,
+            ..Default::default()
         };
 
         let result = analyze_bloat(temp_file.path(), &options).unwrap();
@@ -223,6 +225,7 @@ Content here.
             dry_run: false,
             with_agent_references: false,
             interactive: None,
+            ..Default::default()
         };
 
         let result = analyze_bloat(temp_file.path(), &options).unwrap();
@@ -255,6 +258,7 @@ Content here.
             dry_run: false,
             with_agent_references: false,
             interactive: None,
+            ..Default::default()
         };
 
         let result = analyze_bloat(temp_file.path(), &options).unwrap();
@@ -286,6 +290,7 @@ Content here.
             dry_run: false,
             with_agent_references: false,
             interactive: None,
+            ..Default::default()
         };
 
         let result = analyze_bloat(temp_file.path(), &options).unwrap();

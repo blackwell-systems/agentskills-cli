@@ -20,6 +20,10 @@ pub struct UpgradeCommand {
     /// Show reasoning and preview before applying changes
     #[arg(long)]
     pub interactive: bool,
+
+    /// Semantic analysis provider (anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli)
+    #[arg(long, value_name = "PROVIDER")]
+    pub provider: Option<String>,
 }
 
 /// Synchronous wrapper for the async run function.
@@ -41,6 +45,7 @@ pub async fn run_async(cmd: &UpgradeCommand) -> Result<(), Error> {
         dry_run: cmd.dry_run,
         with_agent_references: cmd.with_agent_references,
         interactive: Some(cmd.interactive),
+        provider: cmd.provider.clone(),
     };
 
     // Print progress to stderr
@@ -178,6 +183,7 @@ mod tests {
             dry_run: false,
             with_agent_references: true,
             interactive: Some(true),
+            ..Default::default()
         };
         assert_eq!(options.interactive, Some(true));
 
@@ -186,6 +192,7 @@ mod tests {
             dry_run: false,
             with_agent_references: false,
             interactive: Some(false),
+            ..Default::default()
         };
         assert_eq!(default_options.interactive, Some(false));
 

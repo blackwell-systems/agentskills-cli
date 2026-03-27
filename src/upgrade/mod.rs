@@ -10,6 +10,7 @@ pub mod pattern_detector;
 pub mod semantic_analyzer;
 pub mod anthropic_api;
 pub mod anthropic_cli;
+pub mod openai_api;
 pub mod gemini_api;
 pub mod gemini_cli;
 pub mod copilot_cli;
@@ -40,8 +41,22 @@ pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Resul
         return Ok(());
     }
 
-    // Create semantic analyzer (supports multiple providers: Anthropic, Gemini, Copilot)
-    let detection = semantic_analyzer::new_analyzer();
+    // Create semantic analyzer (supports multiple providers: Anthropic, OpenAI, Gemini, Copilot)
+    let detection = if let Some(ref provider_name) = options.provider {
+        // User specified a provider explicitly
+        let result = semantic_analyzer::new_analyzer_by_name(provider_name);
+        if result.analyzer.is_none() {
+            eprintln!("{}", result.error_message());
+            return Err(Error::ValidationError(format!(
+                "Failed to initialize provider '{}'",
+                provider_name
+            )));
+        }
+        result
+    } else {
+        // Auto-detect using cascade
+        semantic_analyzer::new_analyzer()
+    };
 
     // If no analyzer found, print helpful error message
     if detection.analyzer.is_none() {
@@ -163,6 +178,7 @@ mod tests {
             dry_run: true,
             with_agent_references: false,
             interactive: None,
+            ..Default::default()
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -191,6 +207,7 @@ mod tests {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
+            ..Default::default()
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -223,6 +240,7 @@ mod tests {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
+            ..Default::default()
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -260,6 +278,7 @@ mod tests {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
+            ..Default::default()
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -278,6 +297,7 @@ mod tests {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
+            ..Default::default()
         };
 
         let result = upgrade_skill(Path::new("/nonexistent/SKILL.md"), &options).await;
