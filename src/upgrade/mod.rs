@@ -6,7 +6,9 @@ pub mod analyzer;
 pub mod generator;
 pub mod splitter;
 pub mod pattern_detector;
-pub mod semantic_analyzer;
+pub mod claude_client;
+pub mod api_client;
+pub mod cli_client;
 pub mod routing_graph;
 pub mod frontmatter_gen;
 
@@ -34,11 +36,11 @@ pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Resul
         return Ok(());
     }
 
-    // Read API key from environment for semantic analysis
-    let api_key = std::env::var("ANTHROPIC_API_KEY").ok();
+    // Create Claude client for semantic analysis (API or CLI)
+    let client = claude_client::new_client();
 
     // Step 3: Split content
-    let split_result = splitter::split_content(skill_path, &analysis, api_key).await?;
+    let split_result = splitter::split_content(skill_path, &analysis, client).await?;
 
     // Step 4: Generate inject script
     let reference_list: Vec<String> = split_result.reference_files.keys().cloned().collect();

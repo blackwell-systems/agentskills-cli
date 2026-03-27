@@ -87,8 +87,7 @@ agentskills upgrade ~/.claude/skills/my-skill --interactive
 # Automatic upgrade with agent-references support
 agentskills upgrade ~/.claude/skills/my-skill --with-agent-references
 
-# With semantic analysis (requires ANTHROPIC_API_KEY)
-export ANTHROPIC_API_KEY=sk-...
+# With semantic analysis (requires ANTHROPIC_API_KEY or claude CLI)
 agentskills upgrade ~/.claude/skills/my-skill --interactive
 ```
 
@@ -124,9 +123,14 @@ agent-references:
       agent_type: "scout"
 ```
 
-### Environment Variables
+### Semantic Analysis Authentication
 
-- `ANTHROPIC_API_KEY` - Required for semantic analysis in upgrade command. Without it, falls back to mechanical splitting (section headers only).
+The `upgrade` command's semantic analysis supports two authentication methods (checked in order):
+
+1. **API Key** - Set `ANTHROPIC_API_KEY` environment variable
+2. **Claude CLI** - Have `claude` command available on PATH (Max plan users)
+
+Without either, the tool falls back to mechanical splitting (section headers only).
 
 ## Installation
 
@@ -141,7 +145,7 @@ cargo install --path .
 ### Requirements
 
 - Rust 1.75+
-- (Optional) Claude API key for semantic analysis
+- (Optional) Claude API key or Claude CLI for semantic analysis
 
 ## Bundled Skills
 
@@ -169,7 +173,7 @@ Detected patterns:
 - Subcommands: `scout`, `wave`, `status`
 - Agent types: `scout`, `wave-agent`
 
-### Semantic Analysis (with ANTHROPIC_API_KEY)
+### Semantic Analysis (with ANTHROPIC_API_KEY or Claude CLI)
 
 Classifies each section's routing intent:
 

@@ -1,6 +1,6 @@
 use crate::models::Error;
 use crate::upgrade::analyzer::BloatAnalysis;
-use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
+use crate::upgrade::claude_client::{ClaudeClient, SectionIntent};
 use crate::upgrade::routing_graph::RoutingGraph;
 use crate::upgrade::frontmatter_gen;
 use crate::upgrade::pattern_detector;
@@ -20,7 +20,7 @@ pub struct SplitResult {
 pub async fn split_content(
     skill_path: &Path,
     analysis: &BloatAnalysis,
-    api_key: Option<String>,
+    client: Option<Box<dyn ClaudeClient>>,
 ) -> Result<SplitResult, Error> {
     let content = fs::read_to_string(skill_path)
         .map_err(|e| Error::IoError(format!("Failed to read SKILL.md: {}", e)))?;
@@ -68,10 +68,8 @@ pub async fn split_content(
     let core_body = core_lines.join("\n");
 
     // Generate triggers and agent-references frontmatter
-    let (triggers_yaml, agent_refs_yaml) = if let Some(key) = api_key {
-        // Semantic analysis path with Claude API
-        let analyzer = SemanticAnalyzer::new(key);
-
+    let (triggers_yaml, agent_refs_yaml) = if let Some(claude_client) = client {
+        // Semantic analysis path with Claude (API or CLI)
         // Extract subcommands and agent types from original content
         let subcommands = pattern_detector::extract_subcommands(&content)?;
         let agent_types = pattern_detector::extract_agent_types(&content)?;
@@ -82,7 +80,7 @@ pub async fn split_content(
             let section_content: String = lines[suggestion.start_line..suggestion.end_line]
                 .join("\n");
 
-            let intent = analyzer
+            let intent = claude_client
                 .analyze_section(&suggestion.section_name, &section_content)
                 .await?;
 
@@ -405,9 +403,9 @@ This section is for wave agent only.
             needs_agent_references: true,
         };
 
-        // Read API key from environment (test will be ignored if not set)
-        let api_key = std::env::var("ANTHROPIC_API_KEY").ok();
-        let result = split_content(temp_file.path(), &analysis, api_key).await.unwrap();
+        // Use client factory (test will be ignored if neither API key nor CLI available)
+        let client = crate::upgrade::claude_client::new_client();
+        let result = split_content(temp_file.path(), &analysis, client).await.unwrap();
 
         // Should have generated frontmatter with triggers and agent-references
         assert!(result.core_content.contains("triggers:"));

@@ -21,6 +21,7 @@ walkdir = "2.3"
 regex = "1.10"
 anthropic-sdk = "0.1.5"
 tokio = { version = "1.0", features = ["full"] }
+which = "6.0"
 
 [dev-dependencies]
 assert_cmd = "2.0"
