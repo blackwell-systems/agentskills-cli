@@ -42,7 +42,9 @@ pub fn validate_progressive_disclosure(
         if !inject_script_path.exists() {
             result.add_error(ValidationError {
                 error_type: "missing_inject_script".to_string(),
-                message: "references/ directory exists but scripts/inject-context script is missing".to_string(),
+                message:
+                    "references/ directory exists but scripts/inject-context script is missing"
+                        .to_string(),
                 file: None,
                 line: None,
                 severity: Severity::Error,
@@ -84,7 +86,7 @@ fn validate_references_structure(
 
         // Check that all files are .md files
         if path.is_file() {
-            if let Some(ext) = path.extension() {
+            let is_md_file = if let Some(ext) = path.extension() {
                 if ext != "md" {
                     result.add_warning(ValidationError {
                         error_type: "invalid_reference_file_type".to_string(),
@@ -96,11 +98,18 @@ fn validate_references_structure(
                         line: None,
                         severity: Severity::Warning,
                     });
+                    false
+                } else {
+                    true
                 }
-            }
+            } else {
+                false
+            };
 
-            // Check for dedup marker at top of file
-            validate_dedup_marker(path, result)?;
+            // Check for dedup marker only for .md files
+            if is_md_file {
+                validate_dedup_marker(path, result)?;
+            }
         }
     }
 
@@ -180,7 +189,9 @@ fn validate_inject_script(script_path: &Path, result: &mut ValidationResult) -> 
         if mode & 0o100 == 0 {
             result.add_warning(ValidationError {
                 error_type: "script_not_executable".to_string(),
-                message: "scripts/inject-context is not executable. Run: chmod +x scripts/inject-context".to_string(),
+                message:
+                    "scripts/inject-context is not executable. Run: chmod +x scripts/inject-context"
+                        .to_string(),
                 file: Some(script_path.to_path_buf()),
                 line: None,
                 severity: Severity::Warning,
@@ -206,7 +217,9 @@ fn has_triggers_frontmatter(content: &str) -> bool {
     // Find closing ---
     if let Some(closing_pos) = lines.iter().skip(1).position(|&line| line.trim() == "---") {
         let frontmatter = &lines[1..=closing_pos];
-        return frontmatter.iter().any(|line| line.trim().starts_with("triggers:"));
+        return frontmatter
+            .iter()
+            .any(|line| line.trim().starts_with("triggers:"));
     }
 
     false
@@ -235,7 +248,10 @@ mod tests {
     fn test_skill_md_over_200_lines() {
         let temp_dir = TempDir::new().unwrap();
         let skill_md = temp_dir.path().join("SKILL.md");
-        let content = (0..250).map(|i| format!("Line {}", i)).collect::<Vec<_>>().join("\n");
+        let content = (0..250)
+            .map(|i| format!("Line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
         fs::write(&skill_md, content).unwrap();
 
         let mut result = ValidationResult::new();
@@ -258,7 +274,10 @@ mod tests {
         validate_progressive_disclosure(temp_dir.path(), &mut result).unwrap();
 
         assert!(!result.is_valid());
-        assert!(result.errors.iter().any(|e| e.error_type == "missing_inject_script"));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.error_type == "missing_inject_script"));
     }
 
     #[test]
@@ -267,16 +286,16 @@ mod tests {
         let references_dir = temp_dir.path().join("references");
         fs::create_dir_all(&references_dir).unwrap();
         let ref_file = references_dir.join("test-ref.md");
-        fs::write(&ref_file, "<!-- injected: references/test-ref.md -->\nSome content").unwrap();
+        fs::write(
+            &ref_file,
+            "<!-- injected: references/test-ref.md -->\nSome content",
+        )
+        .unwrap();
 
         let scripts_dir = temp_dir.path().join("scripts");
         fs::create_dir_all(&scripts_dir).unwrap();
         let inject_script = scripts_dir.join("inject-context");
-        fs::write(
-            &inject_script,
-            "#!/usr/bin/env bash\ncat references/*.md",
-        )
-        .unwrap();
+        fs::write(&inject_script, "#!/usr/bin/env bash\ncat references/*.md").unwrap();
 
         let mut result = ValidationResult::new();
         validate_progressive_disclosure(temp_dir.path(), &mut result).unwrap();
@@ -301,7 +320,10 @@ mod tests {
         validate_progressive_disclosure(temp_dir.path(), &mut result).unwrap();
 
         assert!(!result.is_valid());
-        assert!(result.errors.iter().any(|e| e.error_type == "invalid_dedup_marker"));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.error_type == "invalid_dedup_marker"));
     }
 
     #[test]
@@ -319,7 +341,10 @@ mod tests {
         validate_progressive_disclosure(temp_dir.path(), &mut result).unwrap();
 
         assert!(!result.is_valid());
-        assert!(result.errors.iter().any(|e| e.error_type == "missing_shebang"));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.error_type == "missing_shebang"));
     }
 
     #[test]
@@ -368,6 +393,9 @@ mod tests {
         validate_progressive_disclosure(temp_dir.path(), &mut result).unwrap();
 
         assert!(result.is_valid()); // Warning, not error
-        assert!(result.warnings.iter().any(|w| w.error_type == "invalid_reference_file_type"));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|w| w.error_type == "invalid_reference_file_type"));
     }
 }
