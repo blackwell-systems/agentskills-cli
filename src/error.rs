@@ -16,6 +16,9 @@ pub enum Error {
 
     #[error("YAML error: {0}")]
     YamlError(#[from] serde_yaml::Error),
+
+    #[error("API error: {0}")]
+    ApiError(String),
 }
 
 /// Severity level for validation issues

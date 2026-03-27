@@ -19,6 +19,8 @@ colored = "2.0"
 clap = { version = "4.4", features = ["derive"] }
 walkdir = "2.3"
 regex = "1.10"
+anthropic-sdk = "0.1.5"
+tokio = { version = "1.0", features = ["full"] }
 
 [dev-dependencies]
 assert_cmd = "2.0"
