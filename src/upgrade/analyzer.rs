@@ -1,4 +1,5 @@
 use crate::models::{Error, SkillMetadata, UpgradeOptions};
+use crate::upgrade::pattern_detector;
 use regex::Regex;
 use std::fs;
 use std::path::Path;
@@ -10,6 +11,8 @@ pub struct BloatAnalysis {
     pub suggested_splits: Vec<SplitSuggestion>,
     pub trigger_patterns: Vec<String>,
     pub needs_agent_references: bool,
+    pub subcommands: Vec<String>,
+    pub agent_types: Vec<String>,
 }
 
 /// Represents a section that should be moved to references/
@@ -31,6 +34,12 @@ pub fn analyze_bloat(skill_path: &Path, options: &UpgradeOptions) -> Result<Bloa
 
     // Parse metadata to get skill name for trigger generation
     let metadata = SkillMetadata::from_path(skill_path)?;
+
+    // Extract patterns for routing
+    let subcommands = pattern_detector::extract_subcommands(&content)
+        .unwrap_or_else(|_| vec![]);
+    let agent_types = pattern_detector::extract_agent_types(&content)
+        .unwrap_or_else(|_| vec![]);
 
     // Detect markdown sections using ## headers
     let header_regex = Regex::new(r"^##\s+(.+)$").unwrap();
@@ -124,6 +133,8 @@ pub fn analyze_bloat(skill_path: &Path, options: &UpgradeOptions) -> Result<Bloa
         suggested_splits,
         trigger_patterns,
         needs_agent_references: options.with_agent_references,
+        subcommands,
+        agent_types,
     })
 }
 
@@ -199,6 +210,7 @@ This is a small section.
         let content = r#"---
 name: MySkill
 description: test
+argument-hint: "/myskill [command1|command2]"
 ---
 
 Content here.
@@ -215,6 +227,41 @@ Content here.
         assert!(!result.trigger_patterns.is_empty());
         assert!(result.trigger_patterns.contains(&"/myskill".to_string()));
         assert!(result.trigger_patterns.contains(&"myskill:".to_string()));
+
+        // Should extract subcommands
+        assert!(!result.subcommands.is_empty());
+        assert!(result.subcommands.contains(&"command1".to_string()));
+        assert!(result.subcommands.contains(&"command2".to_string()));
+    }
+
+    #[test]
+    fn test_analyze_bloat_extracts_patterns() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let content = r#"---
+name: test-skill
+description: test
+argument-hint: "/test [scout|wave|status]"
+allowed-tools: ["Agent(subagent_type=wave-agent)", "Agent(subagent_type=scout)"]
+---
+
+Content here.
+"#;
+        temp_file.write_all(content.as_bytes()).unwrap();
+        let options = UpgradeOptions {
+            dry_run: false,
+            with_agent_references: false,
+        };
+
+        let result = analyze_bloat(temp_file.path(), &options).unwrap();
+
+        // Should extract subcommands from argument-hint
+        assert!(result.subcommands.contains(&"scout".to_string()));
+        assert!(result.subcommands.contains(&"wave".to_string()));
+        assert!(result.subcommands.contains(&"status".to_string()));
+
+        // Should extract agent types from allowed-tools
+        assert!(result.agent_types.contains(&"wave-agent".to_string()));
+        assert!(result.agent_types.contains(&"scout".to_string()));
     }
 
     #[test]

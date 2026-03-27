@@ -5,13 +5,18 @@ use std::path::Path;
 pub mod analyzer;
 pub mod generator;
 pub mod splitter;
+pub mod pattern_detector;
+pub mod semantic_analyzer;
+pub mod routing_graph;
+pub mod frontmatter_gen;
 
 pub use analyzer::{analyze_bloat, BloatAnalysis, SplitSuggestion};
 pub use generator::generate_inject_script;
 pub use splitter::{split_content, SplitResult};
+pub use pattern_detector::{extract_subcommands, extract_agent_types};
 
 /// Main upgrade entry point - converts Agent Skill to progressive disclosure pattern
-pub fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Result<(), Error> {
+pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Result<(), Error> {
     // Verify SKILL.md exists
     if !skill_path.exists() {
         return Err(Error::ValidationError(format!(
@@ -29,8 +34,11 @@ pub fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Result<(), 
         return Ok(());
     }
 
+    // Read API key from environment for semantic analysis
+    let api_key = std::env::var("ANTHROPIC_API_KEY").ok();
+
     // Step 3: Split content
-    let split_result = splitter::split_content(skill_path, &analysis)?;
+    let split_result = splitter::split_content(skill_path, &analysis, api_key).await?;
 
     // Step 4: Generate inject script
     let reference_list: Vec<String> = split_result.reference_files.keys().cloned().collect();
