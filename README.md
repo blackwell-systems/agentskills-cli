@@ -139,10 +139,14 @@ my-skill/
 ```
 
 **Routing example (generated):**
+
+The tool extracts your skill's `name:` from frontmatter and generates skill-specific triggers:
+
 ```yaml
+# For a skill named "git-helper"
 triggers:
-  - match: "^/skill-name --examples"
-    inject: references/examples.md
+  - match: "^/git-helper push"
+    inject: references/push-details.md
   - match: "error|failed|broken"
     inject: references/troubleshooting.md
 
