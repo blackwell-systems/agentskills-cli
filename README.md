@@ -91,15 +91,13 @@ agentskills lint ~/.claude/skills/my-skill --json
 
 ### Upgrade - Progressive Disclosure
 
-Transforms large skills into progressive disclosure with semantic analysis and conditional routing.
+Transforms large skills into progressive disclosure with semantic analysis and control-flow awareness.
 
 **What it does:**
-1. **Pattern detection** - Extracts subcommands and agent types from frontmatter
-2. **Semantic analysis** - Classifies section routing intent AND timing (invocation vs runtime)
-3. **Smart splitting** - Moves detailed content to `references/` loaded on-demand
-4. **Control flow externalization** - Converts runtime branches into explicit Read instructions
-5. **Routing generation** - Creates `triggers` and `agent-references` frontmatter
-6. **Script bundling** - Includes production inject-agent-context script
+1. **Semantic analysis** - Classifies section routing intent AND timing (invocation vs runtime)
+2. **Smart splitting** - Moves detailed content to `references/` loaded on-demand
+3. **Control flow externalization** - Converts runtime branches into explicit Read instructions
+4. **Frontmatter preservation** - Keeps existing `name`, `description`, and custom fields unchanged
 
 **Three-tier architecture:**
 - **Tier 1:** Metadata (always loaded) - `name`, `description` for skill discovery
@@ -113,11 +111,8 @@ agentskills upgrade ~/.claude/skills/my-skill --dry-run
 # Interactive mode - confirm before applying
 agentskills upgrade ~/.claude/skills/my-skill --interactive
 
-# Automatic upgrade with agent-references support
-agentskills upgrade ~/.claude/skills/my-skill --with-agent-references
-
 # With semantic analysis (requires ANTHROPIC_API_KEY or claude CLI)
-agentskills upgrade ~/.claude/skills/my-skill --interactive
+agentskills upgrade ~/.claude/skills/my-skill
 ```
 
 **Before upgrade:**
@@ -129,32 +124,23 @@ my-skill/
 **After upgrade:**
 ```
 my-skill/
-├── SKILL.md (150 lines - core overview + routing)
-├── references/
-│   ├── api-docs.md (loaded when user asks about API)
-│   ├── examples.md (loaded for --examples flag)
-│   └── troubleshooting.md (loaded on error patterns)
-└── scripts/
-    └── inject-agent-context (conditional loading logic)
+├── SKILL.md (150 lines - core with breadcrumbs)
+└── references/
+    ├── api-docs.md (invocation-time content)
+    ├── examples.md (command-specific content)
+    └── troubleshooting.md (runtime content with breadcrumb)
 ```
 
-**Routing example (generated):**
-
-The tool extracts your skill's `name:` from frontmatter and generates skill-specific triggers:
-
+**Frontmatter preserved:**
 ```yaml
-# For a skill named "git-helper"
-triggers:
-  - match: "^/git-helper push"
-    inject: references/push-details.md
-  - match: "error|failed|broken"
-    inject: references/troubleshooting.md
-
-agent-references:
-  - file: references/api-docs.md
-    when:
-      agent_type: "scout"
+---
+name: my-skill
+description: Original description preserved unchanged
+# All existing custom fields remain
+---
 ```
+
+The tool extracts sections but does NOT add `triggers:` or `agent-references:` fields.
 
 ### Control Flow Awareness (Invocation vs Runtime)
 
@@ -175,7 +161,7 @@ Semantic analysis classifies WHEN each section is needed:
 
 | Timing | Core SKILL.md | References | Loading |
 |--------|---------------|------------|---------|
-| **Invocation** | Removed entirely | Extracted | Frontmatter trigger (automatic) |
+| **Invocation** | Removed entirely | Extracted | Platform-specific (you configure) |
 | **Runtime** | Breadcrumb left | Extracted | Explicit Read instruction |
 
 **Example - Release skill with CI failure handling:**
@@ -296,13 +282,10 @@ Analyzed as:
 - `agent_type: "scout"`
 - `trigger_timing: "invocation"` (loaded when scout agent launches)
 
-Generates:
-```yaml
-agent-references:
-  - file: references/scout-validation.md
-    when:
-      agent_type: "scout"
-```
+Result:
+- Section removed from core entirely
+- Extracted to `references/scout-validation.md`
+- No frontmatter generated (you wire up loading based on your platform)
 
 **Example 2: Runtime-triggered section**
 ```markdown
