@@ -6,7 +6,7 @@ CLI for validating and upgrading [Agent Skills](https://agentskills.io/specifica
 
 Agent Skills defines a portable format for reusable AI agent capabilities.
 
-This CLI is the enforcement and migration layer for that ecosystem. It validates skills against the spec and evolves existing skills toward it:
+This CLI is the enforcement and migration layer for that ecosystem. It validates skills against the spec and evolves existing skills toward that standard:
 
 - Validate skills against the official spec
 - Upgrade large skills into progressive disclosure (intelligent splitting with semantic routing)
