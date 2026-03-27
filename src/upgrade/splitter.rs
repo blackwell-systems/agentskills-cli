@@ -16,7 +16,13 @@ pub struct SplitResult {
 /// Generate a breadcrumb stub for runtime-triggered sections
 fn generate_breadcrumb(section_name: &str, target_file: &str, condition: Option<&str>) -> String {
     let condition_text = condition
-        .map(|c| format!("when {}", c))
+        .map(|c| {
+            // Strip leading "if " or "when " to avoid "when if X" or "when when X"
+            let cleaned = c
+                .trim_start_matches("if ")
+                .trim_start_matches("when ");
+            format!("when {}", cleaned)
+        })
         .unwrap_or_else(|| "when needed".to_string());
 
     format!(
