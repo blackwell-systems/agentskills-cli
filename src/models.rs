@@ -86,11 +86,37 @@ impl FromStr for SkillMetadata {
     }
 }
 
+/// Routing node representing one reference file with routing metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoutingNode {
+    pub reference_file: String,
+    pub trigger_patterns: Vec<String>,
+    pub agent_types: Vec<String>,
+    pub condition_pattern: Option<String>,
+}
+
+/// Routing graph containing all routing nodes
+#[derive(Debug, Clone)]
+pub struct RoutingGraph {
+    pub nodes: Vec<RoutingNode>,
+}
+
 /// Configuration for upgrade command
 #[derive(Debug, Clone)]
 pub struct UpgradeOptions {
     pub dry_run: bool,
     pub with_agent_references: bool,
+    pub interactive: bool,
+}
+
+impl Default for UpgradeOptions {
+    fn default() -> Self {
+        Self {
+            dry_run: false,
+            with_agent_references: false,
+            interactive: false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -310,5 +336,24 @@ Content
             }
             _ => panic!("Expected ValidationError"),
         }
+    }
+
+    #[test]
+    fn test_upgrade_options_default() {
+        let default_options = UpgradeOptions::default();
+        assert!(!default_options.dry_run);
+        assert!(!default_options.with_agent_references);
+        assert!(!default_options.interactive);
+    }
+
+    #[test]
+    fn test_upgrade_options_with_partial_init() {
+        let options = UpgradeOptions {
+            dry_run: true,
+            ..Default::default()
+        };
+        assert!(options.dry_run);
+        assert!(!options.with_agent_references);
+        assert!(!options.interactive);
     }
 }
