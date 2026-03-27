@@ -6,19 +6,17 @@ CLI for validating and upgrading [Agent Skills](https://agentskills.io/specifica
 
 Agent Skills defines a portable format for reusable AI agent capabilities.
 
-This is the enforcement and migration layer for the Agent Skills ecosystem.
+This CLI is the enforcement and migration layer for that ecosystem. It validates skills against the spec and evolves existing skills toward it:
 
-This CLI enforces that format and evolves existing skills toward it:
-
-1. **Validate** skills against the official spec
-2. **Upgrade** large skills into progressive disclosure (intelligent splitting with semantic routing)
-3. **Detect** vendor extensions and non-standard fields
+- Validate skills against the official spec
+- Upgrade large skills into progressive disclosure (intelligent splitting with semantic routing)
+- Detect vendor extensions and non-standard fields
 
 ## When to use this
 
 - You have an Agent Skill and want to validate it against the spec
 - You have a large skill and want to split it into progressive disclosure
-- You want to detect vendor-specific extensions and understand portability
+- You want to detect vendor extensions and understand portability
 - You are building skills for distribution across multiple agent platforms
 
 ## Features
