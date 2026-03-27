@@ -23,6 +23,7 @@ pub struct SectionIntent {
 /// - AnthropicCli: Shells out to `claude` CLI
 /// - GeminiApi: Uses Google Gemini API SDK
 /// - GeminiCli: Shells out to `gemini` CLI
+/// - CopilotCli: Shells out to `copilot` CLI (GitHub Copilot)
 #[async_trait]
 pub trait SemanticAnalyzer: Send + Sync {
     /// Analyze a section to determine its routing intent
@@ -45,6 +46,7 @@ enum Provider {
     AnthropicCli,
     GeminiApi,
     GeminiCli,
+    CopilotCli,
 }
 
 impl Provider {
@@ -62,6 +64,7 @@ impl Provider {
         match self {
             Provider::AnthropicCli => Some("claude"),
             Provider::GeminiCli => Some("gemini"),
+            Provider::CopilotCli => Some("copilot"),
             _ => None,
         }
     }
@@ -79,7 +82,7 @@ impl Provider {
                 Some(self.create_api_client(api_key))
             }
             // CLI providers: check binary on PATH
-            Provider::AnthropicCli | Provider::GeminiCli => {
+            Provider::AnthropicCli | Provider::GeminiCli | Provider::CopilotCli => {
                 let cli_name = self.cli_name()?;
                 let cli_path = which::which(cli_name).ok()?;
                 Some(self.create_cli_client(cli_path))
@@ -109,6 +112,9 @@ impl Provider {
             Provider::GeminiCli => {
                 Box::new(crate::upgrade::gemini_cli::GeminiCli::new(cli_path))
             }
+            Provider::CopilotCli => {
+                Box::new(crate::upgrade::copilot_cli::CopilotCli::new(cli_path))
+            }
             _ => unreachable!("create_cli_client called on API provider"),
         }
     }
@@ -121,7 +127,8 @@ impl Provider {
 /// 2. `claude` binary on PATH → AnthropicCli
 /// 3. GOOGLE_API_KEY env var → GeminiApi
 /// 4. `gemini` binary on PATH → GeminiCli
-/// 5. None → mechanical split fallback
+/// 5. `copilot` binary on PATH → CopilotCli
+/// 6. None → mechanical split fallback
 ///
 /// This supports multiple AgentSkills-compliant providers.
 pub fn new_analyzer() -> Option<Box<dyn SemanticAnalyzer>> {
@@ -130,6 +137,7 @@ pub fn new_analyzer() -> Option<Box<dyn SemanticAnalyzer>> {
         Provider::AnthropicCli,
         Provider::GeminiApi,
         Provider::GeminiCli,
+        Provider::CopilotCli,
     ];
 
     for provider in PROVIDERS {

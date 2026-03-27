@@ -131,6 +131,7 @@ The `upgrade` command's semantic analysis supports multiple AgentSkills-complian
 2. **Claude CLI** - Have `claude` command available on PATH (Max plan users)
 3. **Gemini API** - Set `GOOGLE_API_KEY` environment variable
 4. **Gemini CLI** - Have `gemini` command available on PATH
+5. **GitHub Copilot CLI** - Have `copilot` command available on PATH (Copilot subscription)
 
 Without any provider, the tool falls back to mechanical splitting (section headers only).
 
@@ -147,7 +148,7 @@ cargo install --path .
 ### Requirements
 
 - Rust 1.75+
-- (Optional) LLM provider for semantic analysis: Anthropic (API/CLI) or Google Gemini (API/CLI)
+- (Optional) LLM provider for semantic analysis: Anthropic (API/CLI), Google Gemini (API/CLI), or GitHub Copilot (CLI)
 
 ## Bundled Skills
 

@@ -12,6 +12,7 @@ pub mod anthropic_api;
 pub mod anthropic_cli;
 pub mod gemini_api;
 pub mod gemini_cli;
+pub mod copilot_cli;
 pub mod routing_graph;
 pub mod frontmatter_gen;
 
