@@ -4,7 +4,6 @@ description: Interactive guide for converting skills to progressive disclosure p
 context: fork
 agent: general-purpose
 allowed-tools: Bash, Read, Write
-disable-model-invocation: true
 argument-hint: "<path-to-skill-directory>"
 ---
 
@@ -166,8 +165,9 @@ triggers:
 ```
 
 **Pattern B: Dynamic injection via shell**
-```markdown
-!`bash scripts/inject-context.sh "$ARGUMENTS"`
+```
+Use backtick injection: !`bash scripts/inject-context.sh "$ARGUMENTS"`
+(Place this in SKILL.md to dynamically load references based on arguments)
 ```
 
 **Pattern C: Agent-specific references**
