@@ -19,11 +19,13 @@ pub mod gemini_cli;
 pub mod copilot_cli;
 pub mod routing_graph;
 pub mod frontmatter_gen;
+pub mod routing_detector;
 
 pub use analyzer::{analyze_bloat, BloatAnalysis, SplitSuggestion};
 pub use generator::generate_inject_script;
 pub use splitter::{split_content, SplitResult, SectionMetadata};
 pub use pattern_detector::{extract_subcommands, extract_agent_types};
+pub use routing_detector::detect_routing_patterns;
 
 /// Main upgrade entry point - converts Agent Skill to progressive disclosure pattern
 pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Result<Option<PreviewData>, Error> {
@@ -243,6 +245,7 @@ mod tests {
             with_agent_references: false,
             interactive: None,
             provider: None,
+            ..Default::default()
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -269,6 +272,7 @@ mod tests {
             with_agent_references: false,
             interactive: None,
             provider: None,
+            ..Default::default()
         };
 
         let result = upgrade_skill(&skill_path, &options).await.unwrap();
@@ -298,6 +302,7 @@ mod tests {
             with_agent_references: false,
             interactive: None,
             provider: None,
+            ..Default::default()
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -334,6 +339,7 @@ mod tests {
             with_agent_references: false,
             interactive: None,
             provider: None,
+            ..Default::default()
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -375,6 +381,7 @@ mod tests {
             with_agent_references: false,
             interactive: None,
             provider: None,
+            ..Default::default()
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
@@ -397,6 +404,7 @@ mod tests {
             with_agent_references: false,
             interactive: None,
             provider: None,
+            ..Default::default()
         };
 
         let result = upgrade_skill(Path::new("/nonexistent/SKILL.md"), &options).await;

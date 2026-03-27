@@ -102,12 +102,29 @@ pub struct RoutingGraph {
 }
 
 /// Configuration for upgrade command
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct UpgradeOptions {
     pub dry_run: bool,
     pub with_agent_references: bool,
     pub interactive: Option<bool>,
     pub provider: Option<String>,
+    pub routing_style: Option<RoutingStyle>,
+    pub show_timing: bool,
+    pub back_links: bool,
+}
+
+impl Default for UpgradeOptions {
+    fn default() -> Self {
+        UpgradeOptions {
+            dry_run: false,
+            with_agent_references: false,
+            interactive: None,
+            provider: None,
+            routing_style: None,
+            show_timing: false,
+            back_links: true,
+        }
+    }
 }
 
 /// Preview data structure for --dry-run mode
@@ -412,4 +429,63 @@ Content
         let runtime = SectionTiming::Runtime;
         assert_ne!(invocation, runtime);
     }
+
+    #[test]
+    fn test_routing_style_default() {
+        let default_style = RoutingStyle::default();
+        assert_eq!(default_style, RoutingStyle::Smart);
+    }
+
+    #[test]
+    fn test_upgrade_options_with_routing() {
+        let options = UpgradeOptions {
+            routing_style: Some(RoutingStyle::Table),
+            show_timing: true,
+            back_links: false,
+            ..Default::default()
+        };
+        assert_eq!(options.routing_style, Some(RoutingStyle::Table));
+        assert!(options.show_timing);
+        assert!(!options.back_links);
+    }
+}
+
+// Routing generation types
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum RoutingStyle {
+    #[default]
+    Smart,    // Auto-select based on subcommand count (inline if <4, table if ≥4)
+    Inline,   // Always use inline breadcrumbs
+    Table,    // Always use routing table
+    None,     // No routing generation
+}
+
+#[derive(Debug, Clone)]
+pub struct RoutingDetectionResult {
+    pub subcommands: Vec<String>,
+    pub agent_types: Vec<String>,
+    pub timing_sections: Vec<TimingSection>,
+    pub recommended_style: RoutingStyle,
+}
+
+#[derive(Debug, Clone)]
+pub struct TimingSection {
+    pub name: String,
+    pub timing: SectionTiming,  // Invocation or Runtime (existing enum)
+    pub trigger_pattern: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RoutingOutput {
+    pub routing_table: Option<String>,
+    pub inline_breadcrumbs: Vec<InlineBreadcrumb>,
+    pub back_link_headers: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct InlineBreadcrumb {
+    pub section_name: String,
+    pub reference_file: String,
+    pub condition: Option<String>,
 }

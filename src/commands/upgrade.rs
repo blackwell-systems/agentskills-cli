@@ -46,6 +46,7 @@ pub async fn run_async(cmd: &UpgradeCommand) -> Result<(), Error> {
         with_agent_references: cmd.with_agent_references,
         interactive: Some(cmd.interactive),
         provider: cmd.provider.clone(),
+        ..Default::default()
     };
 
     // Print progress to stderr
