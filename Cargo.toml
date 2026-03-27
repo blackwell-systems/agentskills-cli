@@ -2,3 +2,25 @@
 name = "agentskills"
 version = "0.1.0"
 edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "CLI tool for validating and upgrading Agent Skills"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "agentskills"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+thiserror = "1.0"
+colored = "2.0"
+clap = { version = "4.4", features = ["derive"] }
+walkdir = "2.3"
+regex = "1.10"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.8"
