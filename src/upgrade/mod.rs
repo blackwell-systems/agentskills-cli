@@ -1,5 +1,8 @@
 use crate::error::Error;
-use crate::models::{ UpgradeOptions};
+use crate::models::{
+    PreviewData, SectionPreview, ReferenceFilePreview, BreadcrumbPreview,
+    SectionTiming, UpgradeOptions
+};
 use std::fs;
 use std::path::Path;
 
@@ -19,11 +22,11 @@ pub mod frontmatter_gen;
 
 pub use analyzer::{analyze_bloat, BloatAnalysis, SplitSuggestion};
 pub use generator::generate_inject_script;
-pub use splitter::{split_content, SplitResult};
+pub use splitter::{split_content, SplitResult, SectionMetadata};
 pub use pattern_detector::{extract_subcommands, extract_agent_types};
 
 /// Main upgrade entry point - converts Agent Skill to progressive disclosure pattern
-pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Result<(), Error> {
+pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Result<Option<PreviewData>, Error> {
     // Verify SKILL.md exists
     if !skill_path.exists() {
         return Err(Error::ValidationError(format!(
@@ -34,12 +37,6 @@ pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Resul
 
     // Step 1: Analyze bloat
     let analysis = analyzer::analyze_bloat(skill_path, options)?;
-
-    // Step 2: If dry-run, print analysis and exit
-    if options.dry_run {
-        print_dry_run_analysis(&analysis);
-        return Ok(());
-    }
 
     // Create semantic analyzer (supports multiple providers: Anthropic, OpenAI, Gemini, Copilot)
     let detection = if let Some(ref provider_name) = options.provider {
@@ -64,8 +61,15 @@ pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Resul
         eprintln!("\nContinuing with mechanical splitting...\n");
     }
 
-    // Step 3: Split content
+    // Step 2: Split content
     let split_result = splitter::split_content(skill_path, &analysis, detection.analyzer).await?;
+
+    // Step 3: If dry-run, build preview data and return it
+    if options.dry_run {
+        let preview_data = build_preview_data(&analysis, &split_result);
+        print_dry_run_preview(&preview_data);
+        return Ok(Some(preview_data));
+    }
 
     // Step 4: Generate inject script
     let reference_list: Vec<String> = split_result.reference_files.keys().cloned().collect();
@@ -116,45 +120,105 @@ pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Resul
         }
     }
 
-    Ok(())
+    Ok(None)
 }
 
-/// Prints dry-run analysis to stdout
-fn print_dry_run_analysis(analysis: &BloatAnalysis) {
+/// Build PreviewData from analysis and split results
+fn build_preview_data(analysis: &BloatAnalysis, split_result: &SplitResult) -> PreviewData {
+    let total_lines = analysis.total_lines;
+    let core_lines_after = split_result.core_content.lines().count();
+
+    // Build section previews from sections_metadata
+    let sections: Vec<SectionPreview> = split_result
+        .sections_metadata
+        .iter()
+        .map(|meta| SectionPreview {
+            name: meta.name.clone(),
+            line_range: (meta.start_line, meta.end_line),
+            target_file: meta.target_file.clone(),
+            timing: meta.timing.clone(),
+        })
+        .collect();
+
+    // Build breadcrumb previews from runtime sections
+    let breadcrumbs: Vec<BreadcrumbPreview> = split_result
+        .sections_metadata
+        .iter()
+        .filter(|meta| meta.timing == SectionTiming::Runtime)
+        .map(|meta| BreadcrumbPreview {
+            section_name: meta.name.clone(),
+            target_file: meta.target_file.clone(),
+            condition: meta.condition.clone(),
+        })
+        .collect();
+
+    // Build reference file previews
+    let reference_files: Vec<ReferenceFilePreview> = split_result
+        .reference_files
+        .iter()
+        .map(|(filename, content)| ReferenceFilePreview {
+            filename: filename.clone(),
+            line_count: content.lines().count(),
+        })
+        .collect();
+
+    PreviewData {
+        total_lines,
+        core_lines_after,
+        sections,
+        reference_files,
+        breadcrumbs,
+    }
+}
+
+/// Prints detailed dry-run preview to stdout
+fn print_dry_run_preview(preview: &PreviewData) {
     println!("=== Upgrade Analysis (Dry Run) ===\n");
-    println!("Total lines: {}", analysis.total_lines);
-    println!();
 
-    if analysis.total_lines > 200 {
-        println!("⚠️  SKILL.md exceeds 200 lines (progressive disclosure threshold)");
+    // Size impact
+    let reduction_pct = if preview.total_lines > 0 {
+        ((preview.total_lines - preview.core_lines_after) as f64 / preview.total_lines as f64 * 100.0) as usize
     } else {
-        println!("✓ SKILL.md is within 200-line threshold");
+        0
+    };
+    println!("Size impact:");
+    println!("  Before: {} lines", preview.total_lines);
+    println!("  After: {} lines ({}% reduction)\n", preview.core_lines_after, reduction_pct);
+
+    // Sections to extract
+    println!("Sections to extract ({}):", preview.sections.len());
+    for section in &preview.sections {
+        let timing_tag = match section.timing {
+            SectionTiming::Invocation => "[invocation]",
+            SectionTiming::Runtime => "[runtime]",
+            SectionTiming::Unknown => "[unknown]",
+        };
+        println!("  {} {} (lines {}-{}) → references/{}",
+            timing_tag, section.name, section.line_range.0, section.line_range.1, section.target_file);
     }
     println!();
 
-    println!("Suggested splits: {}", analysis.suggested_splits.len());
-    for suggestion in &analysis.suggested_splits {
-        println!(
-            "  - {} (lines {}-{}) → references/{}",
-            suggestion.section_name,
-            suggestion.start_line,
-            suggestion.end_line,
-            suggestion.target_file
-        );
+    // Breadcrumbs
+    if !preview.breadcrumbs.is_empty() {
+        println!("Breadcrumbs to create ({}):", preview.breadcrumbs.len());
+        for breadcrumb in &preview.breadcrumbs {
+            let condition_text = breadcrumb.condition.as_ref()
+                .map(|c| format!(" {}", c))
+                .unwrap_or_default();
+            println!("  ## {} — [See references/{}{}]",
+                breadcrumb.section_name, breadcrumb.target_file, condition_text);
+        }
+        println!();
+    }
+
+    // Reference files
+    println!("Reference files to create ({}):", preview.reference_files.len());
+    for ref_file in &preview.reference_files {
+        println!("  references/{} ({} lines)", ref_file.filename, ref_file.line_count);
     }
     println!();
 
-    println!("Generated triggers:");
-    for trigger in &analysis.trigger_patterns {
-        println!("  - {}", trigger);
-    }
-    println!();
-
-    if analysis.needs_agent_references {
-        println!("✓ Will add agent-references field to frontmatter");
-    }
-
-    println!("\nTo apply changes, run without --dry-run flag.");
+    println!("To apply changes, run without --dry-run flag.");
 }
 
 #[cfg(test)]
@@ -178,15 +242,41 @@ mod tests {
             dry_run: true,
             with_agent_references: false,
             interactive: None,
-            ..Default::default()
+            provider: None,
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
         assert!(result.is_ok());
 
+        // Should return Some(preview_data) in dry-run mode
+        let preview_opt = result.unwrap();
+        assert!(preview_opt.is_some());
+
         // Should not create references/ or scripts/
         assert!(!temp_dir.path().join("references").exists());
         assert!(!temp_dir.path().join("scripts").exists());
+    }
+
+    #[tokio::test]
+    async fn test_upgrade_skill_dry_run_returns_preview() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_path = temp_dir.path().join("SKILL.md");
+        let mut file = fs::File::create(&skill_path).unwrap();
+        writeln!(file, "---\nname: test-skill\ndescription: test\n---\n\nContent").unwrap();
+
+        let options = UpgradeOptions {
+            dry_run: true,
+            with_agent_references: false,
+            interactive: None,
+            provider: None,
+        };
+
+        let result = upgrade_skill(&skill_path, &options).await.unwrap();
+
+        // Should return Some(preview_data) in dry-run mode
+        assert!(result.is_some());
+        let preview = result.unwrap();
+        assert!(preview.total_lines > 0);
     }
 
     #[tokio::test]
@@ -207,11 +297,14 @@ mod tests {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
-            ..Default::default()
+            provider: None,
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
         assert!(result.is_ok());
+
+        // Should return None in non-dry-run mode
+        assert!(result.unwrap().is_none());
 
         // Should create references/ and scripts/
         assert!(temp_dir.path().join("references").exists());
@@ -240,11 +333,14 @@ mod tests {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
-            ..Default::default()
+            provider: None,
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
         assert!(result.is_ok());
+
+        // Should return None in non-dry-run mode
+        assert!(result.unwrap().is_none());
 
         // Should create reference file
         let ref_file = temp_dir
@@ -278,11 +374,14 @@ mod tests {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
-            ..Default::default()
+            provider: None,
         };
 
         let result = upgrade_skill(&skill_path, &options).await;
         assert!(result.is_ok());
+
+        // Should return None in non-dry-run mode
+        assert!(result.unwrap().is_none());
 
         // Check script is executable
         let script_path = temp_dir.path().join("scripts").join("inject-context");
@@ -297,7 +396,7 @@ mod tests {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
-            ..Default::default()
+            provider: None,
         };
 
         let result = upgrade_skill(Path::new("/nonexistent/SKILL.md"), &options).await;

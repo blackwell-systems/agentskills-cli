@@ -88,8 +88,15 @@ pub async fn run_async(cmd: &UpgradeCommand) -> Result<(), Error> {
 
     eprintln!("Splitting content...");
     eprintln!("Generating script...");
-    crate::upgrade::upgrade_skill(&skill_md_path, &options).await?;
-    println!("✓ Upgrade complete");
+    let preview_opt = crate::upgrade::upgrade_skill(&skill_md_path, &options).await?;
+
+    if let Some(_preview) = preview_opt {
+        // Dry-run mode: preview_data was returned, already printed by upgrade_skill
+        // No additional output needed here
+    } else {
+        // Non-dry-run mode: files were written
+        println!("✓ Upgrade complete");
+    }
 
     Ok(())
 }

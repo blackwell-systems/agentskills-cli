@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::models::SectionTiming;
 use crate::upgrade::analyzer::BloatAnalysis;
 use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent, TriggerTiming};
 use std::collections::HashMap;
@@ -11,6 +12,18 @@ pub struct SplitResult {
     pub core_content: String,
     pub reference_files: HashMap<String, String>,
     pub triggers: Vec<String>,
+    pub sections_metadata: Vec<SectionMetadata>,
+}
+
+/// Metadata about a section that was extracted
+#[derive(Debug, Clone)]
+pub struct SectionMetadata {
+    pub name: String,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub target_file: String,
+    pub timing: SectionTiming,
+    pub condition: Option<String>,
 }
 
 /// Generate a breadcrumb stub for runtime-triggered sections
@@ -46,6 +59,7 @@ pub async fn split_content(
 
     let lines: Vec<&str> = content.lines().collect();
     let mut reference_files = HashMap::new();
+    let mut sections_metadata = Vec::new();
 
     // Step 1: Find ALL sections (not just suggested splits)
     let all_sections = {
@@ -108,7 +122,7 @@ pub async fn split_content(
     };
 
     // Step 3: Extract sections to reference files (both invocation and runtime)
-    for (_section_name, start_line, end_line, target_file, _intent) in &sections_with_intent {
+    for (section_name, start_line, end_line, target_file, intent) in &sections_with_intent {
         let section_lines: Vec<String> = lines[*start_line..*end_line]
             .iter()
             .map(|&s| s.to_string())
@@ -119,6 +133,22 @@ pub async fn split_content(
         let reference_content = format!("{}{}", dedup_marker, section_lines.join("\n"));
 
         reference_files.insert(target_file.clone(), reference_content);
+
+        // Add metadata for this section
+        let timing = match &intent.trigger_timing {
+            Some(TriggerTiming::Invocation) => SectionTiming::Invocation,
+            Some(TriggerTiming::Runtime) => SectionTiming::Runtime,
+            None => SectionTiming::Unknown,
+        };
+
+        sections_metadata.push(SectionMetadata {
+            name: section_name.clone(),
+            start_line: *start_line,
+            end_line: *end_line,
+            target_file: target_file.clone(),
+            timing,
+            condition: intent.condition_pattern.clone(),
+        });
     }
 
     // Also extract bloat analyzer suggestions not covered by semantic analysis
@@ -138,6 +168,16 @@ pub async fn split_content(
             let reference_content = format!("{}{}", dedup_marker, section_lines.join("\n"));
 
             reference_files.insert(suggestion.target_file.clone(), reference_content);
+
+            // Add metadata for this bloat analyzer suggestion
+            sections_metadata.push(SectionMetadata {
+                name: suggestion.section_name.clone(),
+                start_line: suggestion.start_line,
+                end_line: suggestion.end_line,
+                target_file: suggestion.target_file.clone(),
+                timing: SectionTiming::Unknown,
+                condition: None,
+            });
         }
     }
 
@@ -213,6 +253,7 @@ pub async fn split_content(
         core_content,
         reference_files,
         triggers: analysis.trigger_patterns.clone(),
+        sections_metadata,
     })
 }
 
@@ -371,6 +412,42 @@ Content to extract
         assert!(!result.core_content.contains("agent-references:"));
         // Should extract content to references
         assert!(result.reference_files.contains_key("reference-section.md"));
+    }
+
+    #[tokio::test]
+    async fn test_split_content_returns_section_metadata() {
+        // Create temp file with sections
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let content = r#"---
+name: test-skill
+description: test
+---
+
+## Section 1
+Content here
+"#;
+        temp_file.write_all(content.as_bytes()).unwrap();
+
+        let analysis = BloatAnalysis {
+            total_lines: 8,
+            suggested_splits: vec![SplitSuggestion {
+                section_name: "Section 1".to_string(),
+                start_line: 5,
+                end_line: 7,
+                target_file: "section-1.md".to_string(),
+            }],
+            trigger_patterns: vec![],
+            needs_agent_references: false,
+            subcommands: vec![],
+            agent_types: vec![],
+        };
+
+        let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
+
+        // Should have section metadata
+        assert_eq!(result.sections_metadata.len(), 1);
+        assert_eq!(result.sections_metadata[0].name, "Section 1");
+        assert_eq!(result.sections_metadata[0].timing, SectionTiming::Unknown);
     }
 
     #[tokio::test]
