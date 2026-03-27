@@ -49,6 +49,12 @@ Determine if this section is:
 (3) conditional (only loaded when prompt matches pattern)
 (4) always-loaded (core section for all invocations)
 
+If conditional, classify the trigger timing:
+- "invocation": Triggered by initial user request (subcommand, flag, agent type, explicit topic)
+  Examples: "--dry-run flag", "scout subcommand", "when user asks about X"
+- "runtime": Triggered by state discovered during execution (failures, errors, missing resources)
+  Examples: "if CI fails", "when artifact not found", "on retry", "after error", "return to previous step"
+
 Respond ONLY with valid JSON in this exact format:
 {{
   "is_command_specific": true/false,
@@ -57,6 +63,7 @@ Respond ONLY with valid JSON in this exact format:
   "agent_type": "agent_type_name or null",
   "is_conditional": true/false,
   "condition_pattern": "pattern or null",
+  "trigger_timing": "invocation or runtime or null",
   "reasoning": "brief explanation"
 }}"#,
             section_header, truncated_content

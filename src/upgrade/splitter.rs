@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::upgrade::analyzer::BloatAnalysis;
-use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
+use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent, TriggerTiming};
 use crate::upgrade::frontmatter_gen;
 use crate::upgrade::pattern_detector;
 use std::collections::HashMap;
@@ -15,6 +15,22 @@ pub struct SplitResult {
     pub triggers: Vec<String>,
 }
 
+/// Generate a breadcrumb stub for runtime-triggered sections
+fn generate_breadcrumb(section_name: &str, target_file: &str, condition: Option<&str>) -> String {
+    let condition_text = condition
+        .map(|c| format!("when {}", c))
+        .unwrap_or_else(|| "when needed".to_string());
+
+    format!(
+        "## {} — [See references/{} {}]\n\n\
+        Read `${{SKILL_DIR}}/references/{}` and follow its instructions.\n",
+        section_name,
+        target_file,
+        condition_text,
+        target_file
+    )
+}
+
 /// Splits SKILL.md based on BloatAnalysis
 pub async fn split_content(
     skill_path: &Path,
@@ -27,17 +43,29 @@ pub async fn split_content(
     let lines: Vec<&str> = content.lines().collect();
     let mut reference_files = HashMap::new();
 
-    // Track which lines should be moved to references
-    let mut lines_to_remove: Vec<(usize, usize)> = analysis
-        .suggested_splits
-        .iter()
-        .map(|s| (s.start_line, s.end_line))
-        .collect();
+    // Step 1: Semantic analysis (if available) to determine timing
+    let sections_with_intent: Vec<(String, String, SectionIntent)> = if let Some(ref analyzer) = analyzer {
+        let mut result = Vec::new();
+        for suggestion in &analysis.suggested_splits {
+            let section_content: String = lines[suggestion.start_line..suggestion.end_line]
+                .join("\n");
 
-    // Sort by start line to process in order
-    lines_to_remove.sort_by_key(|&(start, _)| start);
+            let intent = analyzer
+                .analyze_section(&suggestion.section_name, &section_content)
+                .await?;
 
-    // Extract sections and create reference files
+            result.push((
+                suggestion.section_name.clone(),
+                suggestion.target_file.clone(),
+                intent,
+            ));
+        }
+        result
+    } else {
+        Vec::new()
+    };
+
+    // Step 2: Extract sections to reference files
     for suggestion in &analysis.suggested_splits {
         let section_lines: Vec<String> = lines[suggestion.start_line..suggestion.end_line]
             .iter()
@@ -51,14 +79,37 @@ pub async fn split_content(
         reference_files.insert(suggestion.target_file.clone(), reference_content);
     }
 
-    // Build core content by removing extracted sections
+    // Step 3: Build core content with runtime breadcrumbs
     let mut core_lines = Vec::new();
     let mut current_idx = 0;
 
-    for (start, end) in &lines_to_remove {
+    for (i, suggestion) in analysis.suggested_splits.iter().enumerate() {
         // Add lines before this section
-        core_lines.extend(lines[current_idx..*start].iter().map(|&s| s.to_string()));
-        current_idx = *end;
+        core_lines.extend(lines[current_idx..suggestion.start_line].iter().map(|&s| s.to_string()));
+
+        // Check if this section has runtime timing
+        let is_runtime = sections_with_intent
+            .get(i)
+            .and_then(|(_, _, intent)| intent.trigger_timing.as_ref())
+            .map(|timing| matches!(timing, TriggerTiming::Runtime))
+            .unwrap_or(false);
+
+        if is_runtime {
+            // Leave a breadcrumb for runtime sections
+            let condition = sections_with_intent
+                .get(i)
+                .and_then(|(_, _, intent)| intent.condition_pattern.as_deref());
+
+            let breadcrumb = generate_breadcrumb(
+                &suggestion.section_name,
+                &suggestion.target_file,
+                condition,
+            );
+            core_lines.push(breadcrumb);
+        }
+        // For invocation-time sections, remove entirely (no breadcrumb)
+
+        current_idx = suggestion.end_line;
     }
 
     // Add remaining lines
@@ -66,29 +117,11 @@ pub async fn split_content(
 
     let core_body = core_lines.join("\n");
 
-    // Generate triggers and agent-references frontmatter
-    let (triggers_yaml, agent_refs_yaml) = if let Some(claude_analyzer) = analyzer {
-        // Semantic analysis path with Claude (API or CLI)
-        // Extract subcommands and agent types from original content
+    // Step 4: Generate frontmatter
+    let (triggers_yaml, agent_refs_yaml) = if !sections_with_intent.is_empty() {
+        // Semantic analysis path
         let subcommands = pattern_detector::extract_subcommands(&content)?;
         let agent_types = pattern_detector::extract_agent_types(&content)?;
-
-        // Analyze each split section semantically
-        let mut sections_with_intent: Vec<(String, String, SectionIntent)> = Vec::new();
-        for suggestion in &analysis.suggested_splits {
-            let section_content: String = lines[suggestion.start_line..suggestion.end_line]
-                .join("\n");
-
-            let intent = claude_analyzer
-                .analyze_section(&suggestion.section_name, &section_content)
-                .await?;
-
-            sections_with_intent.push((
-                suggestion.section_name.clone(),
-                suggestion.target_file.clone(),
-                intent,
-            ));
-        }
 
         // Build routing graph from patterns and semantic analysis
         let routing_graph = crate::upgrade::routing_graph::build(&subcommands, &agent_types, &sections_with_intent);

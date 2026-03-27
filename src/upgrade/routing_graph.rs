@@ -1,5 +1,5 @@
 use crate::models::{RoutingGraph, RoutingNode};
-use crate::upgrade::semantic_analyzer::SectionIntent;
+use crate::upgrade::semantic_analyzer::{SectionIntent, TriggerTiming};
 
 /// Build routing graph from pattern detector output and semantic analysis results
 ///
@@ -18,6 +18,11 @@ pub fn build(
     let mut nodes = Vec::new();
 
     for (ref_file, _section_header, intent) in sections {
+        // Skip runtime-triggered sections - they're handled by breadcrumbs in core
+        if matches!(intent.trigger_timing, Some(TriggerTiming::Runtime)) {
+            continue;
+        }
+
         let trigger_patterns = if intent.is_command_specific {
             vec![format!("^/saw {}", intent.command.as_ref().unwrap())]
         } else {
@@ -63,6 +68,7 @@ mod tests {
                 agent_type: None,
                 is_conditional: false,
                 condition_pattern: None,
+                trigger_timing: None,
                 reasoning: "Section describes scout command usage".to_string(),
             },
         )];
@@ -88,6 +94,7 @@ mod tests {
                 agent_type: Some("wave-agent".to_string()),
                 is_conditional: false,
                 condition_pattern: None,
+                trigger_timing: None,
                 reasoning: "Section contains procedures for wave agents".to_string(),
             },
         )];
@@ -116,6 +123,7 @@ mod tests {
                 agent_type: None,
                 is_conditional: true,
                 condition_pattern: Some("--advanced".to_string()),
+                trigger_timing: None,
                 reasoning: "Section only relevant when advanced flag is used".to_string(),
             },
         )];
@@ -147,6 +155,7 @@ mod tests {
                 agent_type: None,
                 is_conditional: false,
                 condition_pattern: None,
+                trigger_timing: None,
                 reasoning: "Section contains general concepts for all uses".to_string(),
             },
         )];

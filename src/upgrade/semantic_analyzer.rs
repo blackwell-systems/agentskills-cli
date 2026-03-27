@@ -53,6 +53,16 @@ impl DetectionResult {
     }
 }
 
+/// When a conditional section should be loaded
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TriggerTiming {
+    /// Loaded based on initial invocation (subcommand, flags, agent type)
+    Invocation,
+    /// Loaded during execution based on runtime state (failures, discovered conditions)
+    Runtime,
+}
+
 /// Intent classification for a skill section, determined by semantic analysis
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SectionIntent {
@@ -62,6 +72,7 @@ pub struct SectionIntent {
     pub agent_type: Option<String>,
     pub is_conditional: bool,
     pub condition_pattern: Option<String>,
+    pub trigger_timing: Option<TriggerTiming>,
     pub reasoning: String,
 }
 
@@ -299,6 +310,7 @@ mod tests {
             agent_type: None,
             is_conditional: false,
             condition_pattern: None,
+            trigger_timing: None,
             reasoning: "Test reasoning".to_string(),
         };
 
