@@ -166,7 +166,8 @@ triggers:
 
 **Pattern B: Dynamic injection via shell**
 ```
-Use backtick injection: !`bash scripts/inject-context.sh "$ARGUMENTS"`
+Use backtick injection: ![BACKTICK]bash scripts/inject-context.sh "$ARGUMENTS"[BACKTICK]
+(Replace [BACKTICK] with actual ` character)
 (Place this in SKILL.md to dynamically load references based on arguments)
 ```
 
