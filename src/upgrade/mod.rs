@@ -20,12 +20,14 @@ pub mod copilot_cli;
 pub mod routing_graph;
 pub mod frontmatter_gen;
 pub mod routing_detector;
+pub mod routing_generator;
 
 pub use analyzer::{analyze_bloat, BloatAnalysis, SplitSuggestion};
 pub use generator::generate_inject_script;
 pub use splitter::{split_content, SplitResult, SectionMetadata};
 pub use pattern_detector::{extract_subcommands, extract_agent_types};
 pub use routing_detector::detect_routing_patterns;
+pub use routing_generator::generate_routing;
 
 /// Main upgrade entry point - converts Agent Skill to progressive disclosure pattern
 pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Result<Option<PreviewData>, Error> {
