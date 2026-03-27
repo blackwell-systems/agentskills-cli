@@ -1,0 +1,40 @@
+{
+  "entries": {
+    "380301a7e81671d51ffb380052f4040d": {
+      "lint": {
+        "gate_type": "lint",
+        "command": "cargo clippy -- -D warnings",
+        "passed": false,
+        "exit_code": 101,
+        "stdout": "",
+        "stderr": "error: could not find `Cargo.toml` in `/Users/dayna.blackwell/code/agentskills-cli` or any parent directory\n",
+        "from_cache": true,
+        "cached_at": "2026-03-26T19:23:58.514709-07:00"
+      }
+    },
+    "5ea3f8d50c98c8433b9f7b200042e1de": {
+      "test": {
+        "gate_type": "test",
+        "command": "cargo test --all",
+        "passed": false,
+        "exit_code": 101,
+        "stdout": "",
+        "stderr": "error: could not find `Cargo.toml` in `/Users/dayna.blackwell/code/agentskills-cli` or any parent directory\n",
+        "from_cache": true,
+        "cached_at": "2026-03-26T19:23:58.664241-07:00"
+      }
+    },
+    "901b9cd1ba418cedc70ce21282143d57": {
+      "build": {
+        "gate_type": "build",
+        "command": "cargo build --all",
+        "passed": false,
+        "exit_code": 101,
+        "stdout": "",
+        "stderr": "error: could not find `Cargo.toml` in `/Users/dayna.blackwell/code/agentskills-cli` or any parent directory\n",
+        "from_cache": true,
+        "cached_at": "2026-03-26T19:23:58.284164-07:00"
+      }
+    }
+  }
+}
