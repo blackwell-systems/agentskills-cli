@@ -83,7 +83,7 @@ pub fn validate_extensions(metadata: &SkillMetadata, result: &mut ValidationResu
     }
 
     // Warn on unknown fields (encourage innovation, don't block)
-    for (field_name, _) in &metadata.unknown_fields {
+    for field_name in metadata.unknown_fields.keys() {
         result.add_warning(ValidationError {
             error_type: "unknown_field".to_string(),
             message: format!(
@@ -206,8 +206,16 @@ mod tests {
             let mut result = ValidationResult::new();
             validate_extensions(&metadata, &mut result);
 
-            assert!(result.is_valid(), "Invalid version should be warning, not error");
-            assert_eq!(result.warnings.len(), 1, "Version {} should produce warning", version);
+            assert!(
+                result.is_valid(),
+                "Invalid version should be warning, not error"
+            );
+            assert_eq!(
+                result.warnings.len(),
+                1,
+                "Version {} should produce warning",
+                version
+            );
         }
     }
 
@@ -228,8 +236,14 @@ mod tests {
 
         assert!(result.is_valid()); // Warnings don't affect validity
         assert_eq!(result.warnings.len(), 2);
-        assert!(result.warnings.iter().any(|w| w.message.contains("custom-field")));
-        assert!(result.warnings.iter().any(|w| w.message.contains("another-unknown")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|w| w.message.contains("custom-field")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|w| w.message.contains("another-unknown")));
     }
 
     #[test]
@@ -238,10 +252,9 @@ mod tests {
         metadata.triggers = Some(vec!["".to_string()]);
         metadata.model = Some("  ".to_string());
         metadata.version = Some("invalid".to_string());
-        metadata.unknown_fields.insert(
-            "custom".to_string(),
-            serde_yaml::Value::Bool(true),
-        );
+        metadata
+            .unknown_fields
+            .insert("custom".to_string(), serde_yaml::Value::Bool(true));
 
         let mut result = ValidationResult::new();
         validate_extensions(&metadata, &mut result);
