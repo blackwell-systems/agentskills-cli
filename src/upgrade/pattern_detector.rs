@@ -113,6 +113,20 @@ pub fn extract_agent_types(content: &str) -> Result<Vec<String>, Error> {
     Ok(agent_types)
 }
 
+/// Extract skill name from SKILL.md frontmatter
+///
+/// Parses YAML frontmatter and returns the `name:` field value.
+/// Used to generate skill-specific trigger patterns (e.g., "^/saw scout" vs "^/git-helper push").
+pub fn extract_skill_name(content: &str) -> Result<String, Error> {
+    let frontmatter = extract_frontmatter(content)?;
+    let yaml: serde_yaml::Value = serde_yaml::from_str(frontmatter)?;
+
+    yaml.get("name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| Error::ParseError("Missing name field in frontmatter".to_string()))
+}
+
 /// Helper function to extract frontmatter from SKILL.md content
 fn extract_frontmatter(content: &str) -> Result<&str, Error> {
     if !content.starts_with("---\n") {
@@ -132,6 +146,34 @@ fn extract_frontmatter(content: &str) -> Result<&str, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_extract_skill_name() {
+        let content = r#"---
+name: git-helper
+description: Test skill
+---
+
+Content here.
+"#;
+
+        let result = extract_skill_name(content).unwrap();
+        assert_eq!(result, "git-helper");
+    }
+
+    #[test]
+    fn test_extract_skill_name_missing() {
+        let content = r#"---
+description: Test skill without name
+---
+
+Content here.
+"#;
+
+        let result = extract_skill_name(content);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Missing name field"));
+    }
 
     #[test]
     fn test_extract_subcommands_basic() {

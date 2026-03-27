@@ -4,6 +4,7 @@ use crate::upgrade::semantic_analyzer::{SectionIntent, TriggerTiming};
 /// Build routing graph from pattern detector output and semantic analysis results
 ///
 /// Takes:
+/// - `skill_name`: Skill name from frontmatter (e.g., "saw", "git-helper")
 /// - `subcommands`: Vec<String> from PatternDetector::extract_subcommands
 /// - `agent_types`: Vec<String> from PatternDetector::extract_agent_types
 /// - `sections`: Vec<(ref_file, section_header, intent)> from semantic analysis
@@ -11,6 +12,7 @@ use crate::upgrade::semantic_analyzer::{SectionIntent, TriggerTiming};
 /// Returns RoutingGraph with nodes array. Each node maps one reference file
 /// to its routing metadata (triggers, agent_types, condition_pattern).
 pub fn build(
+    skill_name: &str,
     _subcommands: &[String],
     _agent_types: &[String],
     sections: &[(String, String, SectionIntent)],
@@ -24,7 +26,7 @@ pub fn build(
         }
 
         let trigger_patterns = if intent.is_command_specific {
-            vec![format!("^/saw {}", intent.command.as_ref().unwrap())]
+            vec![format!("^/{} {}", skill_name, intent.command.as_ref().unwrap())]
         } else {
             vec![]
         };
@@ -73,13 +75,36 @@ mod tests {
             },
         )];
 
-        let graph = build(&[], &[], &sections);
+        let graph = build("saw", &[], &[], &sections);
 
         assert_eq!(graph.nodes.len(), 1);
         assert_eq!(graph.nodes[0].reference_file, "references/scout-details.md");
         assert_eq!(graph.nodes[0].trigger_patterns, vec!["^/saw scout"]);
         assert!(graph.nodes[0].agent_types.is_empty());
         assert!(graph.nodes[0].condition_pattern.is_none());
+    }
+
+    #[test]
+    fn test_build_uses_skill_name_in_triggers() {
+        let sections = vec![(
+            "references/push-details.md".to_string(),
+            "Push Command".to_string(),
+            SectionIntent {
+                is_command_specific: true,
+                command: Some("push".to_string()),
+                is_agent_specific: false,
+                agent_type: None,
+                is_conditional: false,
+                condition_pattern: None,
+                trigger_timing: None,
+                reasoning: "Section describes push command".to_string(),
+            },
+        )];
+
+        let graph = build("git-helper", &[], &[], &sections);
+
+        assert_eq!(graph.nodes.len(), 1);
+        assert_eq!(graph.nodes[0].trigger_patterns, vec!["^/git-helper push"]);
     }
 
     #[test]
@@ -99,7 +124,7 @@ mod tests {
             },
         )];
 
-        let graph = build(&[], &[], &sections);
+        let graph = build("saw", &[], &[], &sections);
 
         assert_eq!(graph.nodes.len(), 1);
         assert_eq!(
@@ -128,7 +153,7 @@ mod tests {
             },
         )];
 
-        let graph = build(&[], &[], &sections);
+        let graph = build("saw", &[], &[], &sections);
 
         assert_eq!(graph.nodes.len(), 1);
         assert_eq!(
@@ -160,7 +185,7 @@ mod tests {
             },
         )];
 
-        let graph = build(&[], &[], &sections);
+        let graph = build("saw", &[], &[], &sections);
 
         assert_eq!(graph.nodes.len(), 1);
         assert_eq!(graph.nodes[0].reference_file, "references/core-concepts.md");

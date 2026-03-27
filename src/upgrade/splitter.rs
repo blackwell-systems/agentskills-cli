@@ -201,6 +201,7 @@ pub async fn split_content(
     // Step 5: Generate frontmatter
     let (triggers_yaml, agent_refs_yaml) = if !sections_with_intent.is_empty() {
         // Semantic analysis path
+        let skill_name = pattern_detector::extract_skill_name(&content)?;
         let subcommands = pattern_detector::extract_subcommands(&content)?;
         let agent_types = pattern_detector::extract_agent_types(&content)?;
 
@@ -213,7 +214,7 @@ pub async fn split_content(
             .collect();
 
         // Build routing graph from patterns and semantic analysis
-        let routing_graph = crate::upgrade::routing_graph::build(&subcommands, &agent_types, &routing_input);
+        let routing_graph = crate::upgrade::routing_graph::build(&skill_name, &subcommands, &agent_types, &routing_input);
 
         // Generate frontmatter from routing graph
         let triggers = frontmatter_gen::generate_triggers(&routing_graph);
