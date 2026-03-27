@@ -17,7 +17,7 @@ pub struct RoutingGraph {
 /// Generates triggers YAML from routing graph
 ///
 /// Iterates over graph nodes and emits YAML entries for each node with trigger_patterns.
-/// Format follows SAW skill specification:
+/// Format follows progressive disclosure specification:
 /// ```yaml
 /// triggers:
 ///   - match: "<pattern>"
@@ -52,7 +52,7 @@ pub fn generate_triggers(graph: &RoutingGraph) -> String {
 /// Generates agent-references YAML from routing graph
 ///
 /// Iterates over graph nodes and emits YAML entries for each node with agent_types.
-/// Format follows SAW skill specification:
+/// Format follows progressive disclosure specification:
 /// ```yaml
 /// agent-references:
 ///   - agent-type: <type>

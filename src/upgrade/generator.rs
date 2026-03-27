@@ -2,34 +2,34 @@ use crate::models::Error;
 use std::fs;
 use std::path::Path;
 
-/// Bundles the SAW inject-agent-context script for advanced progressive disclosure.
+/// Bundles the inject-agent-context script for advanced progressive disclosure.
 ///
 /// This function replaces the previous simple script generator with the full-featured
-/// SAW inject-agent-context script, which supports:
+/// inject-agent-context script, which supports:
 /// - YAML frontmatter parsing from SKILL.md
 /// - Agent-type-specific reference injection
 /// - Conditional injection via `when:` patterns
 /// - Deduplication markers to prevent double injection
 ///
-/// The bundled script is production-tested in the Scout-and-Wave protocol.
+/// The bundled script is production-tested and vendor-neutral.
 pub fn generate_inject_script(
     _skill_path: &Path,
     _reference_files: &[String],
 ) -> Result<String, Error> {
-    bundle_saw_script()
+    bundle_inject_script()
 }
 
-fn bundle_saw_script() -> Result<String, Error> {
-    let saw_script_path = Path::new("/Users/dayna.blackwell/code/scout-and-wave/implementations/claude-code/prompts/scripts/inject-agent-context");
+fn bundle_inject_script() -> Result<String, Error> {
+    let script_path = Path::new("/Users/dayna.blackwell/code/scout-and-wave/implementations/claude-code/prompts/scripts/inject-agent-context");
 
-    if !saw_script_path.exists() {
+    if !script_path.exists() {
         return Err(Error::IoError(
-            format!("SAW inject-agent-context script not found at {:?}", saw_script_path)
+            format!("inject-agent-context script not found at {:?}", script_path)
         ));
     }
 
-    let script_content = fs::read_to_string(saw_script_path)
-        .map_err(|e| Error::IoError(format!("Failed to read SAW script: {}", e)))?;
+    let script_content = fs::read_to_string(script_path)
+        .map_err(|e| Error::IoError(format!("Failed to read inject-agent-context script: {}", e)))?;
 
     Ok(script_content)
 }
@@ -47,7 +47,7 @@ mod tests {
         // Should have shebang
         assert!(result.starts_with("#!/usr/bin/env bash"));
 
-        // Should have SAW script features
+        // Should have inject script features
         assert!(result.contains("inject-agent-context"));
         assert!(result.contains("agent-references"));
     }
@@ -63,10 +63,10 @@ mod tests {
     }
 
     #[test]
-    fn test_bundle_saw_script() {
-        let result = bundle_saw_script();
+    fn test_bundle_inject_script() {
+        let result = bundle_inject_script();
 
-        // Should succeed (SAW script exists)
+        // Should succeed (inject script exists)
         assert!(result.is_ok());
 
         let script = result.unwrap();
@@ -74,7 +74,7 @@ mod tests {
         // Should have shebang
         assert!(script.starts_with("#!/usr/bin/env bash"));
 
-        // Should contain SAW script features
+        // Should contain inject script features
         assert!(script.contains("inject-agent-context"));
         assert!(script.contains("--type"));
         assert!(script.contains("--prompt"));

@@ -7,7 +7,7 @@ CLI tool for validating and upgrading [Agent Skills](https://agentskills.io/spec
 Agent Skills is a specification for writing reusable AI agent capabilities. This CLI helps you:
 
 1. **Validate** skills against the official spec
-2. **Upgrade** large skills using progressive disclosure (SAW-quality splitting with semantic routing)
+2. **Upgrade** large skills using progressive disclosure (intelligent splitting with semantic routing)
 3. **Detect** vendor extensions and non-standard fields
 
 ## Features
@@ -42,14 +42,14 @@ agentskills lint ~/.claude/skills/my-skill --json
 
 ### Upgrade - Progressive Disclosure
 
-Transforms large skills into SAW-quality progressive disclosure with semantic analysis and conditional routing.
+Transforms large skills into progressive disclosure with semantic analysis and conditional routing.
 
 **What it does:**
 1. **Pattern detection** - Extracts subcommands and agent types from frontmatter
 2. **Semantic analysis** - Uses Claude API to classify section routing intent
 3. **Smart splitting** - Moves detailed content to `references/` loaded on-demand
 4. **Routing generation** - Creates `triggers` and `agent-references` frontmatter
-5. **Script bundling** - Includes production SAW inject-agent-context script
+5. **Script bundling** - Includes production inject-agent-context script
 
 **Three-tier architecture:**
 - **Tier 1:** Metadata (always loaded) - `name`, `description` for skill discovery
@@ -187,7 +187,7 @@ The tool recognizes common vendor-specific fields and validates their format:
 | Field | Validation | Spec Status |
 |-------|-----------|-------------|
 | `triggers` | Array of strings, non-empty | Vendor extension (Claude Code) |
-| `agent-references` | Array of objects with `file`, optional `when` | Vendor extension (SAW) |
+| `agent-references` | Array of objects with `file`, optional `when` | Vendor extension |
 | `model` | Non-empty string | Vendor extension (Claude Code) |
 | `version` | Semver format | Vendor extension (suggest `metadata.version`) |
 
@@ -195,7 +195,7 @@ The tool recognizes common vendor-specific fields and validates their format:
 
 ### Progressive Disclosure Rules
 
-Based on empirical context economy research (SAW protocol):
+Based on empirical context economy research:
 
 - **200-line core limit** - Keeps skill loading fast, forces focus on essential content
 - **References loaded on-demand** - Detailed docs only when needed (subcommand, agent type, error pattern)
@@ -267,8 +267,6 @@ agentskills lint skills/new-skill --json | \
 ## Related Projects
 
 - [Agent Skills Specification](https://agentskills.io/specification) - Official spec
-- [Scout-and-Wave](https://github.com/blackwell-systems/scout-and-wave) - Parallel agent coordination protocol
-- [sawtools](https://github.com/blackwell-systems/sawtools) - SAW CLI orchestrator
 
 ## License
 
