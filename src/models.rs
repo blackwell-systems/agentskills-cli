@@ -86,11 +86,27 @@ impl FromStr for SkillMetadata {
     }
 }
 
+/// Routing node representing one reference file with routing metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoutingNode {
+    pub reference_file: String,
+    pub trigger_patterns: Vec<String>,
+    pub agent_types: Vec<String>,
+    pub condition_pattern: Option<String>,
+}
+
+/// Routing graph containing all routing nodes
+#[derive(Debug, Clone)]
+pub struct RoutingGraph {
+    pub nodes: Vec<RoutingNode>,
+}
+
 /// Configuration for upgrade command
 #[derive(Debug, Clone)]
 pub struct UpgradeOptions {
     pub dry_run: bool,
     pub with_agent_references: bool,
+    pub interactive: bool,
 }
 
 #[cfg(test)]
