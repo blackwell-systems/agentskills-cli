@@ -16,7 +16,7 @@ This CLI is the enforcement and migration layer for that ecosystem. It validates
 
 ## Why a CLI instead of a skill?
 
-A skill can help you design progressive disclosure. This CLI implements it.
+A skill can apply progressive disclosure at runtime. This CLI compiles it ahead of time.
 
 Progressive disclosure is a structural concern: it determines what enters the model's context and when. Doing that work at runtime requires loading and reasoning about large skills inside the model itself.
 
