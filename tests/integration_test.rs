@@ -113,7 +113,8 @@ fn test_upgrade_dry_run_no_files_written() {
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Upgrade complete"));
+        .stdout(predicate::str::contains("Upgrade Analysis (Dry Run)"))
+        .stdout(predicate::str::contains("To apply changes, run without --dry-run flag"));
 
     // Verify no files were created in dry-run mode
     assert!(!temp_dir.path().join("references").exists());
