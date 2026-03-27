@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::models::SectionTiming;
+use crate::models::{RoutingOutput, SectionTiming};
 use crate::upgrade::analyzer::BloatAnalysis;
 use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent, TriggerTiming};
 use std::collections::HashMap;
@@ -53,6 +53,7 @@ pub async fn split_content(
     skill_path: &Path,
     analysis: &BloatAnalysis,
     analyzer: Option<Box<dyn SemanticAnalyzer>>,
+    routing: Option<&RoutingOutput>,
 ) -> Result<SplitResult, Error> {
     let content = fs::read_to_string(skill_path)
         .map_err(|e| Error::ValidationError(format!("Failed to read SKILL.md: {}", e)))?;
@@ -130,7 +131,14 @@ pub async fn split_content(
 
         // Add dedup marker at the start
         let dedup_marker = format!("<!-- injected: references/{} -->\n", target_file);
-        let reference_content = format!("{}{}", dedup_marker, section_lines.join("\n"));
+
+        // Add back-link header if routing provides one
+        let back_link_header = routing
+            .and_then(|r| r.back_link_headers.get(target_file))
+            .map(|h| format!("{}\n", h))
+            .unwrap_or_default();
+
+        let reference_content = format!("{}{}{}", dedup_marker, back_link_header, section_lines.join("\n"));
 
         reference_files.insert(target_file.clone(), reference_content);
 
@@ -165,7 +173,14 @@ pub async fn split_content(
                 .collect();
 
             let dedup_marker = format!("<!-- injected: references/{} -->\n", suggestion.target_file);
-            let reference_content = format!("{}{}", dedup_marker, section_lines.join("\n"));
+
+            // Add back-link header if routing provides one
+            let back_link_header = routing
+                .and_then(|r| r.back_link_headers.get(&suggestion.target_file))
+                .map(|h| format!("{}\n", h))
+                .unwrap_or_default();
+
+            let reference_content = format!("{}{}{}", dedup_marker, back_link_header, section_lines.join("\n"));
 
             reference_files.insert(suggestion.target_file.clone(), reference_content);
 
@@ -223,13 +238,33 @@ pub async fn split_content(
         core_lines.extend(lines[current_idx..start_line].iter().map(|&s| s.to_string()));
 
         if is_runtime {
-            // Leave a breadcrumb for runtime sections
-            let condition = sections_with_intent
-                .iter()
-                .find(|(_, s, _, _, _)| *s == start_line)
-                .and_then(|(_, _, _, _, intent)| intent.condition_pattern.as_deref());
-
-            let breadcrumb = generate_breadcrumb(&section_name, &target_file, condition);
+            // Use routing breadcrumbs if available, otherwise fall back to generate_breadcrumb
+            let breadcrumb = if let Some(routing_output) = routing {
+                // Find matching inline breadcrumb
+                routing_output.inline_breadcrumbs.iter()
+                    .find(|bc| bc.section_name == section_name && bc.reference_file == target_file)
+                    .map(|bc| format!(
+                        "## {} — [See references/{} {}]\n\n\
+                        Read `${{SKILL_DIR}}/references/{}` and follow its instructions.\n",
+                        bc.section_name,
+                        bc.reference_file,
+                        bc.condition.as_ref().map(|c| format!("when {}", c)).unwrap_or_else(|| "when needed".to_string()),
+                        bc.reference_file
+                    ))
+                    .unwrap_or_else(|| {
+                        let condition = sections_with_intent
+                            .iter()
+                            .find(|(_, s, _, _, _)| *s == start_line)
+                            .and_then(|(_, _, _, _, intent)| intent.condition_pattern.as_deref());
+                        generate_breadcrumb(&section_name, &target_file, condition)
+                    })
+            } else {
+                let condition = sections_with_intent
+                    .iter()
+                    .find(|(_, s, _, _, _)| *s == start_line)
+                    .and_then(|(_, _, _, _, intent)| intent.condition_pattern.as_deref());
+                generate_breadcrumb(&section_name, &target_file, condition)
+            };
             core_lines.push(breadcrumb);
         }
         // For invocation-time sections, remove entirely (no breadcrumb)
@@ -242,12 +277,18 @@ pub async fn split_content(
 
     let core_body = core_lines.join("\n");
 
-    // Step 5: Preserve existing frontmatter
+    // Step 5: Preserve existing frontmatter and prepend routing table if present
     // Extract existing frontmatter if present - we keep it unchanged
     let (existing_frontmatter, body_without_frontmatter) = extract_frontmatter(&core_body);
 
-    // Reassemble with preserved frontmatter
-    let core_content = format!("{}{}", existing_frontmatter, body_without_frontmatter);
+    // Prepend routing table if routing style is Table
+    let routing_table_section = routing
+        .and_then(|r| r.routing_table.as_ref())
+        .map(|table| format!("{}\n", table))
+        .unwrap_or_default();
+
+    // Reassemble with preserved frontmatter + routing table + body
+    let core_content = format!("{}{}{}", existing_frontmatter, routing_table_section, body_without_frontmatter);
 
     Ok(SplitResult {
         core_content,
@@ -309,7 +350,7 @@ Content 2
             agent_types: vec![],
         };
 
-        let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
+        let result = split_content(temp_file.path(), &analysis, None, None).await.unwrap();
 
         // Should have one reference file
         assert_eq!(result.reference_files.len(), 1);
@@ -338,7 +379,7 @@ Content here
             agent_types: vec![],
         };
 
-        let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
+        let result = split_content(temp_file.path(), &analysis, None, None).await.unwrap();
 
         // Should NOT add triggers frontmatter (no longer generated)
         assert!(!result.core_content.contains("triggers:"));
@@ -366,7 +407,7 @@ Content here
             agent_types: vec![],
         };
 
-        let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
+        let result = split_content(temp_file.path(), &analysis, None, None).await.unwrap();
 
         // Should preserve name and description exactly as they were
         assert!(result.core_content.contains("name: existing-skill"));
@@ -403,7 +444,7 @@ Content to extract
             agent_types: vec![],
         };
 
-        let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
+        let result = split_content(temp_file.path(), &analysis, None, None).await.unwrap();
 
         // Should preserve original frontmatter unchanged
         assert!(result.core_content.contains("name: test-skill"));
@@ -442,7 +483,7 @@ Content here
             agent_types: vec![],
         };
 
-        let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
+        let result = split_content(temp_file.path(), &analysis, None, None).await.unwrap();
 
         // Should have section metadata
         assert_eq!(result.sections_metadata.len(), 1);
@@ -495,7 +536,7 @@ This section is for wave agent only.
 
         // Use analyzer factory (test will be ignored if neither API key nor CLI available)
         let detection = crate::upgrade::semantic_analyzer::new_analyzer();
-        let result = split_content(temp_file.path(), &analysis, detection.analyzer)
+        let result = split_content(temp_file.path(), &analysis, detection.analyzer, None)
             .await
             .unwrap();
 

@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::models::UpgradeOptions;
+use crate::models::{RoutingStyle, UpgradeOptions};
 use clap::Parser;
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
@@ -24,6 +24,18 @@ pub struct UpgradeCommand {
     /// Semantic analysis provider (anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli)
     #[arg(long, value_name = "PROVIDER")]
     pub provider: Option<String>,
+
+    /// Routing style (smart, inline, table, none)
+    #[arg(long, value_name = "STYLE")]
+    pub routing_style: Option<String>,
+
+    /// Show timing annotations in routing
+    #[arg(long)]
+    pub timing: bool,
+
+    /// Generate back-links in reference files
+    #[arg(long, default_value = "true")]
+    pub back_links: bool,
 }
 
 /// Synchronous wrapper for the async run function.
@@ -40,13 +52,26 @@ pub fn run(cmd: &UpgradeCommand) -> Result<(), Error> {
 /// Async implementation of the upgrade command.
 /// Handles interactive mode with user confirmation and calls the async upgrade_skill function.
 pub async fn run_async(cmd: &UpgradeCommand) -> Result<(), Error> {
+    // Parse routing style if provided
+    let routing_style = cmd.routing_style.as_ref().map(|s| {
+        match s.to_lowercase().as_str() {
+            "smart" => RoutingStyle::Smart,
+            "inline" => RoutingStyle::Inline,
+            "table" => RoutingStyle::Table,
+            "none" => RoutingStyle::None,
+            _ => RoutingStyle::Smart, // Default to smart if invalid
+        }
+    });
+
     // Build upgrade options from command flags
     let options = UpgradeOptions {
         dry_run: cmd.dry_run,
         with_agent_references: cmd.with_agent_references,
         interactive: Some(cmd.interactive),
         provider: cmd.provider.clone(),
-        ..Default::default()
+        routing_style,
+        show_timing: cmd.timing,
+        back_links: cmd.back_links,
     };
 
     // Print progress to stderr

@@ -67,8 +67,25 @@ pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Resul
         eprintln!("\nContinuing with mechanical splitting...\n");
     }
 
-    // Step 2: Split content
-    let split_result = splitter::split_content(skill_path, &analysis, detection.analyzer).await?;
+    // Step 1.5: Detect routing patterns
+    let routing_detection = routing_detector::detect_routing_patterns(skill_path, options)?;
+
+    // Step 1.6: Interactive preview (if enabled)
+    let routing_style = if options.interactive.unwrap_or(false) {
+        interactive_recommender::show_interactive_preview(&routing_detection, options)?
+            .unwrap_or(routing_detection.recommended_style.clone())
+    } else {
+        options.routing_style.clone().unwrap_or(routing_detection.recommended_style.clone())
+    };
+
+    // Step 1.7: Generate routing artifacts
+    let content = fs::read_to_string(skill_path)
+        .map_err(|e| Error::ValidationError(format!("Failed to read SKILL.md: {}", e)))?;
+    let skill_name = extract_skill_name(&content)?;
+    let routing_output = routing_generator::generate_routing(&routing_detection, routing_style, &skill_name)?;
+
+    // Step 2: Split content (pass routing_output)
+    let split_result = splitter::split_content(skill_path, &analysis, detection.analyzer, Some(&routing_output)).await?;
 
     // Step 3: If dry-run, build preview data and return it
     if options.dry_run {
@@ -175,6 +192,13 @@ fn build_preview_data(analysis: &BloatAnalysis, split_result: &SplitResult) -> P
         reference_files,
         breadcrumbs,
     }
+}
+
+/// Extract skill name from SKILL.md content
+fn extract_skill_name(content: &str) -> Result<String, Error> {
+    use crate::models::SkillMetadata;
+    let metadata: SkillMetadata = content.parse()?;
+    Ok(metadata.name)
 }
 
 /// Prints detailed dry-run preview to stdout
