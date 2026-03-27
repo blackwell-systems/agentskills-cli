@@ -1,4 +1,4 @@
-use crate::types::{Error, UpgradeOptions};
+use crate::models::{Error, UpgradeOptions};
 use std::fs;
 use std::path::Path;
 

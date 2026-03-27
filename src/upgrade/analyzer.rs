@@ -1,4 +1,4 @@
-use crate::types::{Error, SkillMetadata, UpgradeOptions};
+use crate::models::{Error, SkillMetadata, UpgradeOptions};
 use regex::Regex;
 use std::fs;
 use std::path::Path;

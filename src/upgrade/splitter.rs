@@ -1,4 +1,4 @@
-use crate::types::Error;
+use crate::models::Error;
 use crate::upgrade::analyzer::BloatAnalysis;
 use std::collections::HashMap;
 use std::fs;

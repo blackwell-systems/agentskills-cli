@@ -1,4 +1,4 @@
-use crate::types::Error;
+use crate::models::Error;
 use std::path::Path;
 
 /// Generates portable bash script for injecting references into agent context
