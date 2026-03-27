@@ -1,0 +1,628 @@
+completion_date: "2026-03-27"
+title: Enhance --dry-run to show detailed preview output
+feature_slug: dry-run-preview
+verdict: SUITABLE
+suitability_assessment: |-
+    Q1: File decomposition — Yes. The work decomposes cleanly across 5 files:
+    - src/upgrade/mod.rs — modify dry-run output function
+    - src/upgrade/splitter.rs — expose section metadata (timing classification)
+    - src/upgrade/analyzer.rs — no changes needed (data already available)
+    - src/commands/upgrade.rs — pass structured data from upgrade_skill
+    - src/models.rs — add PreviewData struct for structured output
+
+    No conflicting modifications to the same file. Each agent has disjoint file ownership.
+
+    Q2: Investigation-first items — No. The feature is well-defined: expose existing internal
+    data that's already computed but not displayed during --dry-run.
+
+    Q3: Interface discoverability — Yes. Interfaces are clear:
+    - upgrade_skill returns Result<PreviewData, Error> instead of Result<(), Error>
+    - split_content returns SplitResult (already exists, may need extension)
+    - print_dry_run_preview accepts PreviewData struct
+
+    Q4: Pre-implementation status — Greenfield feature addition. No audit items to check.
+
+    Q5: Parallelization value — Build/test cycle ~15-20s (moderate). 3 agents with 2-3 files
+    each. High independence (single wave). Moderate complexity (data structure changes,
+    formatting logic).
+
+    Estimated times:
+    - Scout phase: ~8 min
+    - Agent execution: ~12 min (3 agents, parallel)
+    - Merge & verification: ~3 min
+    Total: ~23 min vs ~18 min sequential (~22% speedup)
+
+    Recommendation: SUITABLE. Modest parallelization gains, but IMPL doc provides value as
+    interface specification and ensures agents don't create conflicting data structures.
+test_command: cargo test
+lint_command: cargo clippy -- -D warnings
+file_ownership:
+    - file: src/models.rs
+      agent: A
+      wave: 1
+      action: modify
+    - file: src/upgrade/splitter.rs
+      agent: B
+      wave: 1
+      action: modify
+    - file: src/upgrade/mod.rs
+      agent: C
+      wave: 1
+      action: modify
+    - file: src/commands/upgrade.rs
+      agent: C
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: PreviewData
+      description: Structured data for --dry-run preview output
+      definition: |-
+        // src/models.rs
+
+        /// Preview data structure for --dry-run mode
+        /// Contains all computed data that would be written to disk
+        #[derive(Debug, Clone)]
+        pub struct PreviewData {
+            pub total_lines: usize,
+            pub core_lines_after: usize,
+            pub sections: Vec<SectionPreview>,
+            pub reference_files: Vec<ReferenceFilePreview>,
+            pub breadcrumbs: Vec<BreadcrumbPreview>,
+        }
+
+        /// Preview of a section that will be extracted
+        #[derive(Debug, Clone)]
+        pub struct SectionPreview {
+            pub name: String,
+            pub line_range: (usize, usize),
+            pub target_file: String,
+            pub timing: SectionTiming,
+        }
+
+        /// Timing classification for a section
+        #[derive(Debug, Clone, PartialEq)]
+        pub enum SectionTiming {
+            Invocation,  // Loaded at skill invocation time
+            Runtime,     // Loaded during execution (runtime branch)
+            Unknown,     // No semantic analysis performed
+        }
+
+        /// Preview of a reference file that will be created
+        #[derive(Debug, Clone)]
+        pub struct ReferenceFilePreview {
+            pub filename: String,
+            pub line_count: usize,
+        }
+
+        /// Preview of a breadcrumb that will be left in core
+        #[derive(Debug, Clone)]
+        pub struct BreadcrumbPreview {
+            pub section_name: String,
+            pub target_file: String,
+            pub condition: Option<String>,
+        }
+      location: src/models.rs
+    - name: upgrade_skill
+      description: Modified to return PreviewData instead of () in dry-run mode
+      definition: |-
+        // src/upgrade/mod.rs
+
+        pub async fn upgrade_skill(
+            skill_path: &Path,
+            options: &UpgradeOptions,
+        ) -> Result<Option<PreviewData>, Error>
+
+        // Returns:
+        // - Some(PreviewData) if options.dry_run is true
+        // - None if options.dry_run is false (files written, no preview data)
+      location: src/upgrade/mod.rs
+    - name: split_content
+      description: Modified to return section timing metadata
+      definition: |-
+        // src/upgrade/splitter.rs
+
+        /// Extended result of splitting SKILL.md into core + references/
+        #[derive(Debug)]
+        pub struct SplitResult {
+            pub core_content: String,
+            pub reference_files: HashMap<String, String>,
+            pub triggers: Vec<String>,
+            pub sections_metadata: Vec<SectionMetadata>,  // NEW FIELD
+        }
+
+        /// Metadata about a section that was extracted
+        #[derive(Debug, Clone)]
+        pub struct SectionMetadata {
+            pub name: String,
+            pub start_line: usize,
+            pub end_line: usize,
+            pub target_file: String,
+            pub timing: SectionTiming,  // Re-exported from models.rs
+            pub condition: Option<String>,
+        }
+
+        // Function signature remains the same:
+        pub async fn split_content(
+            skill_path: &Path,
+            analysis: &BloatAnalysis,
+            analyzer: Option<Box<dyn SemanticAnalyzer>>,
+        ) -> Result<SplitResult, Error>
+      location: src/upgrade/splitter.rs
+    - name: print_dry_run_preview
+      description: New function to format and display PreviewData
+      definition: |-
+        // src/upgrade/mod.rs
+
+        /// Prints detailed dry-run preview to stdout
+        fn print_dry_run_preview(preview: &PreviewData) {
+            // Format:
+            // === Upgrade Analysis (Dry Run) ===
+            //
+            // Size impact:
+            //   Before: XXX lines
+            //   After: YYY lines (ZZ% reduction)
+            //
+            // Sections to extract (N):
+            //   [invocation] Section Name (lines X-Y) → references/file.md
+            //   [runtime] Other Section (lines A-B, when CI fails) → references/other.md
+            //
+            // Breadcrumbs to create (M):
+            //   ## Other Section — [See references/other.md when CI fails]
+            //
+            // Reference files to create (K):
+            //   references/file.md (XX lines)
+            //   references/other.md (YY lines)
+            //
+            // To apply changes, run without --dry-run flag.
+        }
+      location: src/upgrade/mod.rs
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |-
+            ## What to implement
+
+            Add PreviewData struct and related types to src/models.rs for structured
+            --dry-run output. This provides the data model that other agents will populate
+            and format.
+
+            ## Interfaces to implement
+
+            Define these types in src/models.rs:
+
+            ```rust
+            /// Preview data structure for --dry-run mode
+            #[derive(Debug, Clone)]
+            pub struct PreviewData {
+                pub total_lines: usize,
+                pub core_lines_after: usize,
+                pub sections: Vec<SectionPreview>,
+                pub reference_files: Vec<ReferenceFilePreview>,
+                pub breadcrumbs: Vec<BreadcrumbPreview>,
+            }
+
+            /// Preview of a section that will be extracted
+            #[derive(Debug, Clone)]
+            pub struct SectionPreview {
+                pub name: String,
+                pub line_range: (usize, usize),
+                pub target_file: String,
+                pub timing: SectionTiming,
+            }
+
+            /// Timing classification for a section
+            #[derive(Debug, Clone, PartialEq)]
+            pub enum SectionTiming {
+                Invocation,
+                Runtime,
+                Unknown,
+            }
+
+            /// Preview of a reference file that will be created
+            #[derive(Debug, Clone)]
+            pub struct ReferenceFilePreview {
+                pub filename: String,
+                pub line_count: usize,
+            }
+
+            /// Preview of a breadcrumb that will be left in core
+            #[derive(Debug, Clone)]
+            pub struct BreadcrumbPreview {
+                pub section_name: String,
+                pub target_file: String,
+                pub condition: Option<String>,
+            }
+            ```
+
+            Re-export SectionTiming from semantic_analyzer if it already exists there
+            with the same values, or create a new one in models.rs.
+
+            ## Tests
+
+            Add unit tests in src/models.rs tests module:
+
+            ```rust
+            #[test]
+            fn test_preview_data_creation() {
+                let preview = PreviewData {
+                    total_lines: 300,
+                    core_lines_after: 150,
+                    sections: vec![],
+                    reference_files: vec![],
+                    breadcrumbs: vec![],
+                };
+                assert_eq!(preview.total_lines, 300);
+            }
+
+            #[test]
+            fn test_section_timing_classification() {
+                let invocation = SectionTiming::Invocation;
+                let runtime = SectionTiming::Runtime;
+                assert_ne!(invocation, runtime);
+            }
+            ```
+
+            ## Verification gate
+
+            ```bash
+            cargo build && cargo clippy -- -D warnings && cargo test
+            ```
+
+            ## Constraints
+
+            - Keep PreviewData in src/models.rs (same file as SkillMetadata, UpgradeOptions)
+            - Use #[derive(Debug, Clone)] for all preview types
+            - If SectionTiming duplicates TriggerTiming from semantic_analyzer.rs, either
+              re-export it or create a separate enum (check Agent B's work on splitter.rs
+              for guidance)
+            - Do not modify any other files
+          files:
+            - src/models.rs
+        - id: B
+          task: |-
+            ## What to implement
+
+            Extend SplitResult in src/upgrade/splitter.rs to include section metadata with
+            timing classification. This exposes the internal section analysis data so that
+            --dry-run can show which sections are invocation-time vs runtime.
+
+            ## Interfaces to implement
+
+            Extend SplitResult:
+
+            ```rust
+            /// Extended result of splitting SKILL.md into core + references/
+            #[derive(Debug)]
+            pub struct SplitResult {
+                pub core_content: String,
+                pub reference_files: HashMap<String, String>,
+                pub triggers: Vec<String>,
+                pub sections_metadata: Vec<SectionMetadata>,  // NEW FIELD
+            }
+
+            /// Metadata about a section that was extracted
+            #[derive(Debug, Clone)]
+            pub struct SectionMetadata {
+                pub name: String,
+                pub start_line: usize,
+                pub end_line: usize,
+                pub target_file: String,
+                pub timing: SectionTiming,  // Import from models.rs (Agent A)
+                pub condition: Option<String>,
+            }
+            ```
+
+            Modify split_content function to populate sections_metadata:
+
+            - For each section in sections_with_intent (line ~111), create a SectionMetadata
+              entry and add to a Vec
+            - Extract timing from intent.trigger_timing (convert TriggerTiming to SectionTiming)
+            - Extract condition from intent.condition_pattern
+            - Also capture sections from bloat analyzer suggestions (line ~125) with
+              timing = SectionTiming::Unknown
+            - Store the Vec in SplitResult.sections_metadata
+
+            ## Tests
+
+            Add test in src/upgrade/splitter.rs tests module:
+
+            ```rust
+            #[tokio::test]
+            async fn test_split_content_returns_section_metadata() {
+                // Create temp file with sections
+                let mut temp_file = NamedTempFile::new().unwrap();
+                let content = r#"---
+            name: test-skill
+            description: test
+            ---
+
+            ## Section 1
+            Content here
+            "#;
+                temp_file.write_all(content.as_bytes()).unwrap();
+
+                let analysis = BloatAnalysis {
+                    total_lines: 8,
+                    suggested_splits: vec![SplitSuggestion {
+                        section_name: "Section 1".to_string(),
+                        start_line: 5,
+                        end_line: 7,
+                        target_file: "section-1.md".to_string(),
+                    }],
+                    trigger_patterns: vec![],
+                    needs_agent_references: false,
+                    subcommands: vec![],
+                    agent_types: vec![],
+                };
+
+                let result = split_content(temp_file.path(), &analysis, None).await.unwrap();
+
+                // Should have section metadata
+                assert_eq!(result.sections_metadata.len(), 1);
+                assert_eq!(result.sections_metadata[0].name, "Section 1");
+                assert_eq!(result.sections_metadata[0].timing, SectionTiming::Unknown);
+            }
+            ```
+
+            ## Verification gate
+
+            ```bash
+            cargo build && cargo clippy -- -D warnings && cargo test
+            ```
+
+            ## Constraints
+
+            - Import SectionTiming from crate::models (Agent A's work)
+            - Do not modify split_content signature (keep it as is)
+            - sections_metadata should be an empty Vec if no sections are extracted
+            - Preserve all existing behavior (core_content, reference_files, triggers)
+            - Timing conversion: TriggerTiming::Invocation → SectionTiming::Invocation,
+              TriggerTiming::Runtime → SectionTiming::Runtime, None → SectionTiming::Unknown
+          files:
+            - src/upgrade/splitter.rs
+        - id: C
+          task: |-
+            ## What to implement
+
+            Modify upgrade_skill in src/upgrade/mod.rs to return PreviewData in dry-run mode,
+            and update src/commands/upgrade.rs to handle the new return type. Replace the
+            simple print_dry_run_analysis with a detailed print_dry_run_preview that shows
+            section timing, breadcrumbs, and size impact.
+
+            ## Interfaces to implement
+
+            In src/upgrade/mod.rs:
+
+            ```rust
+            pub async fn upgrade_skill(
+                skill_path: &Path,
+                options: &UpgradeOptions,
+            ) -> Result<Option<PreviewData>, Error>
+            ```
+
+            Change the function to:
+            - Run steps 1-3 as before (analyze_bloat, create analyzer, split_content)
+            - In dry-run mode (options.dry_run == true):
+              - Build PreviewData from analysis + split_result
+              - Return Ok(Some(preview_data))
+            - In non-dry-run mode:
+              - Write files as before (steps 4-5)
+              - Return Ok(None)
+
+            Replace print_dry_run_analysis with:
+
+            ```rust
+            fn print_dry_run_preview(preview: &PreviewData) {
+                println!("=== Upgrade Analysis (Dry Run) ===\n");
+
+                // Size impact
+                let reduction_pct = if preview.total_lines > 0 {
+                    ((preview.total_lines - preview.core_lines_after) as f64 / preview.total_lines as f64 * 100.0) as usize
+                } else {
+                    0
+                };
+                println!("Size impact:");
+                println!("  Before: {} lines", preview.total_lines);
+                println!("  After: {} lines ({}% reduction)\n", preview.core_lines_after, reduction_pct);
+
+                // Sections to extract
+                println!("Sections to extract ({}):", preview.sections.len());
+                for section in &preview.sections {
+                    let timing_tag = match section.timing {
+                        SectionTiming::Invocation => "[invocation]",
+                        SectionTiming::Runtime => "[runtime]",
+                        SectionTiming::Unknown => "[unknown]",
+                    };
+                    println!("  {} {} (lines {}-{}) → references/{}",
+                        timing_tag, section.name, section.line_range.0, section.line_range.1, section.target_file);
+                }
+                println!();
+
+                // Breadcrumbs
+                if !preview.breadcrumbs.is_empty() {
+                    println!("Breadcrumbs to create ({}):", preview.breadcrumbs.len());
+                    for breadcrumb in &preview.breadcrumbs {
+                        let condition_text = breadcrumb.condition.as_ref()
+                            .map(|c| format!(" {}", c))
+                            .unwrap_or_default();
+                        println!("  ## {} — [See references/{}{}]",
+                            breadcrumb.section_name, breadcrumb.target_file, condition_text);
+                    }
+                    println!();
+                }
+
+                // Reference files
+                println!("Reference files to create ({}):", preview.reference_files.len());
+                for ref_file in &preview.reference_files {
+                    println!("  references/{} ({} lines)", ref_file.filename, ref_file.line_count);
+                }
+                println!();
+
+                println!("To apply changes, run without --dry-run flag.");
+            }
+            ```
+
+            In src/commands/upgrade.rs:
+
+            Update the run_async function to handle the new return type:
+
+            ```rust
+            let preview_opt = crate::upgrade::upgrade_skill(&skill_md_path, &options).await?;
+
+            if let Some(preview) = preview_opt {
+                // Dry-run mode: preview_data was returned, already printed by upgrade_skill
+                // No additional output needed here
+            } else {
+                // Non-dry-run mode: files were written
+                println!("✓ Upgrade complete");
+            }
+            ```
+
+            ## Tests
+
+            Update existing test in src/upgrade/mod.rs:
+
+            ```rust
+            #[tokio::test]
+            async fn test_upgrade_skill_dry_run_returns_preview() {
+                let temp_dir = TempDir::new().unwrap();
+                let skill_path = temp_dir.path().join("SKILL.md");
+                let mut file = fs::File::create(&skill_path).unwrap();
+                writeln!(file, "---\nname: test-skill\ndescription: test\n---\n\nContent").unwrap();
+
+                let options = UpgradeOptions {
+                    dry_run: true,
+                    with_agent_references: false,
+                    interactive: None,
+                    provider: None,
+                };
+
+                let result = upgrade_skill(&skill_path, &options).await.unwrap();
+
+                // Should return Some(preview_data) in dry-run mode
+                assert!(result.is_some());
+                let preview = result.unwrap();
+                assert!(preview.total_lines > 0);
+            }
+            ```
+
+            ## Verification gate
+
+            ```bash
+            cargo build && cargo clippy -- -D warnings && cargo test
+            ```
+
+            ## Constraints
+
+            - Import PreviewData, SectionPreview, etc. from crate::models (Agent A)
+            - Import SectionMetadata from crate::upgrade::splitter (Agent B)
+            - Call print_dry_run_preview from upgrade_skill in dry-run mode before returning
+            - Preserve all existing non-dry-run behavior (file writes, script generation)
+            - Count core_lines_after by splitting split_result.core_content by '\n'
+            - Extract breadcrumbs from split_result.sections_metadata where timing == Runtime
+            - Count reference_files line counts from split_result.reference_files values
+            - Remove the old print_dry_run_analysis function entirely
+          files:
+            - src/upgrade/mod.rs
+            - src/commands/upgrade.rs
+      base_commit: 97bb5a70172aaf4b90aca04e1c6655350f009b2c
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: cargo build
+          required: true
+        - type: lint
+          command: cargo clippy -- -D warnings
+          required: true
+        - type: test
+          command: cargo test
+          required: true
+        - type: format
+          command: cargo fmt --check
+          required: false
+completion_reports:
+    A:
+        status: complete
+        branch: saw/dry-run-preview/wave1-agent-A
+        commit: fe295a8
+        files_changed:
+            - src/models.rs
+        tests_added:
+            - test_preview_data_creation
+            - test_section_timing_classification
+        verification: PASS
+    B:
+        status: complete
+        branch: saw/dry-run-preview/wave1-agent-B
+        commit: e409bf1
+        files_changed:
+            - src/models.rs
+            - src/upgrade/splitter.rs
+        tests_added:
+            - test_split_content_returns_section_metadata
+        verification: PASS
+    C:
+        status: complete
+        branch: saw/dry-run-preview/wave1-agent-C
+        commit: c494cd5
+        files_changed:
+            - src/upgrade/mod.rs
+            - src/commands/upgrade.rs
+        tests_added:
+            - test_upgrade_skill_dry_run_returns_preview
+        verification: PASS
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: Agent B's SectionMetadata conflicts with models.rs types from Agent A
+          likelihood: low
+          impact: medium
+          mitigation: Agent B imports SectionTiming from models.rs; no duplicate definitions
+        - scenario: Agent C's PreviewData construction logic misses edge cases (empty sections, no breadcrumbs)
+          likelihood: medium
+          impact: low
+          mitigation: Agent C handles empty vecs explicitly; add tests for zero-section case
+        - scenario: print_dry_run_preview formatting breaks on long section names
+          likelihood: low
+          impact: low
+          mitigation: No truncation needed; terminal wrapping handles long lines
+        - scenario: Existing tests fail after upgrade_skill signature change
+          likelihood: medium
+          impact: medium
+          mitigation: Agent C updates all tests in mod.rs to expect Option<PreviewData> return type
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+            issues:
+                - check: symbol_accuracy
+                  severity: warning
+                  description: Brief instructs to import SectionTiming from crate::models, but TriggerTiming already exists in semantic_analyzer.rs (line 59-64) with identical semantics (Invocation/Runtime variants). Agents should coordinate on whether to create new enum or re-export existing one.
+                  file: src/upgrade/semantic_analyzer.rs
+                  symbol: TriggerTiming
+        C:
+            agent_id: C
+            verdict: PASS
+            issues:
+                - check: pattern_accuracy
+                  severity: warning
+                  description: Brief references print_dry_run_analysis function (line 123 of mod.rs) which exists and will be removed. Pattern is accurate but agents should verify removal is complete.
+                  file: src/upgrade/mod.rs
+                  symbol: print_dry_run_analysis
+                - check: caller_exhaustiveness
+                  severity: warning
+                  description: Brief constraint says to update all tests in mod.rs to expect Option PreviewData return type but does not enumerate specific test names. Existing test_upgrade_skill_dry_run_does_not_write at line 167 clearly needs updating. Agent should scan for all callers of upgrade_skill.
+                  file: src/upgrade/mod.rs
+                  symbol: upgrade_skill
+    summary: 'All agent briefs verified against codebase. Files exist, symbols are accurate, and patterns match actual implementation. Three minor warnings identified: (1) Agent B''s brief references SectionTiming from models.rs but TriggerTiming already exists in semantic_analyzer.rs with same semantics - agents should coordinate on type naming; (2) Agent C references print_dry_run_analysis which exists but will be removed; (3) Agent C''s constraint to update all tests is vague but existing test at line 167 clearly needs updating. These are advisory only and do not block execution.'
+    reviewed_at: "2026-03-27T18:29:35Z"
+    issue_count: 3
+state: COMPLETE
+injection_method: hook
