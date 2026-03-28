@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::models::{RoutingStyle, DecomposeOptions};
 use clap::Parser;
+use colored::Colorize;
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
 
@@ -91,16 +92,16 @@ pub async fn run_async(cmd: &DecomposeCommand) -> Result<(), Error> {
     };
 
     // Print progress to stderr
-    eprintln!("Analyzing...");
+    eprintln!("{}", "Analyzing...".cyan());
 
     // If interactive mode, show preview and get user confirmation
     if cmd.interactive {
         // Note: Detailed preview (analysis results, routing graph, frontmatter changes)
         // would be implemented here after Agent E's decompose_skill returns structured data.
         // For now, we show a basic prompt.
-        eprintln!("\n--- Preview Mode ---");
+        eprintln!("\n{}", "--- Preview Mode ---".bold());
         eprintln!("Analysis complete. Changes will be applied to: {:?}", cmd.path);
-        eprintln!("\nApply these changes? [y/N]: ");
+        eprintln!("\n{}", "Apply these changes? [y/N]: ".bold());
 
         use std::io::{self, BufRead};
         let stdin = io::stdin();
@@ -109,7 +110,7 @@ pub async fn run_async(cmd: &DecomposeCommand) -> Result<(), Error> {
 
         let response = input.trim().to_lowercase();
         if response != "y" && response != "yes" {
-            eprintln!("Decompose cancelled.");
+            eprintln!("{}", "Decompose cancelled.".yellow());
             return Ok(());
         }
     }
@@ -128,8 +129,8 @@ pub async fn run_async(cmd: &DecomposeCommand) -> Result<(), Error> {
         )));
     }
 
-    eprintln!("Splitting content...");
-    eprintln!("Generating script...");
+    eprintln!("{}", "Splitting content...".cyan());
+    eprintln!("{}", "Generating script...".cyan());
     let preview_opt = crate::decompose::decompose_skill(&skill_md_path, &options).await?;
 
     if let Some(_preview) = preview_opt {
@@ -137,7 +138,7 @@ pub async fn run_async(cmd: &DecomposeCommand) -> Result<(), Error> {
         // No additional output needed here
     } else {
         // Non-dry-run mode: files were written
-        println!("✓ Decompose complete");
+        println!("{}", "✓ Decompose complete".green().bold());
     }
 
     Ok(())

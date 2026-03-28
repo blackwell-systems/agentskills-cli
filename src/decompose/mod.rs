@@ -3,6 +3,7 @@ use crate::models::{
     PreviewData, SectionPreview, ReferenceFilePreview, BreadcrumbPreview,
     SectionTiming, DecomposeOptions
 };
+use colored::Colorize;
 use std::fs;
 use std::path::Path;
 
@@ -203,7 +204,7 @@ fn extract_skill_name(content: &str) -> Result<String, Error> {
 
 /// Prints detailed dry-run preview to stdout
 fn print_dry_run_preview(preview: &PreviewData) {
-    println!("=== Decompose Analysis (Dry Run) ===\n");
+    println!("{}\n", "=== Decompose Analysis (Dry Run) ===".bold().cyan());
 
     // Size impact
     let reduction_pct = if preview.total_lines > 0 {
@@ -211,17 +212,24 @@ fn print_dry_run_preview(preview: &PreviewData) {
     } else {
         0
     };
-    println!("Size impact:");
+    println!("{}","Size impact:".bold());
     println!("  Before: {} lines", preview.total_lines);
-    println!("  After: {} lines ({}% reduction)\n", preview.core_lines_after, reduction_pct);
+    let reduction_color = if reduction_pct >= 30 {
+        format!("{}% reduction", reduction_pct).green()
+    } else if reduction_pct >= 10 {
+        format!("{}% reduction", reduction_pct).yellow()
+    } else {
+        format!("{}% reduction", reduction_pct).normal()
+    };
+    println!("  After: {} lines ({})\n", preview.core_lines_after, reduction_color);
 
     // Sections to extract
-    println!("Sections to extract ({}):", preview.sections.len());
+    println!("{} ({}):", "Sections to extract".bold(), preview.sections.len());
     for section in &preview.sections {
         let timing_tag = match section.timing {
-            SectionTiming::Invocation => "[invocation]",
-            SectionTiming::Runtime => "[runtime]",
-            SectionTiming::Unknown => "[unknown]",
+            SectionTiming::Invocation => "[invocation]".blue(),
+            SectionTiming::Runtime => "[runtime]".magenta(),
+            SectionTiming::Unknown => "[unknown]".dimmed(),
         };
         println!("  {} {} (lines {}-{}) → references/{}",
             timing_tag, section.name, section.line_range.0, section.line_range.1, section.target_file);
@@ -230,25 +238,26 @@ fn print_dry_run_preview(preview: &PreviewData) {
 
     // Breadcrumbs
     if !preview.breadcrumbs.is_empty() {
-        println!("Breadcrumbs to create ({}):", preview.breadcrumbs.len());
+        println!("{} ({}):", "Breadcrumbs to create".bold(), preview.breadcrumbs.len());
         for breadcrumb in &preview.breadcrumbs {
             let condition_text = breadcrumb.condition.as_ref()
                 .map(|c| format!(" {}", c))
                 .unwrap_or_default();
-            println!("  ## {} — [See references/{}{}]",
-                breadcrumb.section_name, breadcrumb.target_file, condition_text);
+            println!("  ## {} — {}",
+                breadcrumb.section_name,
+                format!("[See references/{}{}]", breadcrumb.target_file, condition_text).dimmed());
         }
         println!();
     }
 
     // Reference files
-    println!("Reference files to create ({}):", preview.reference_files.len());
+    println!("{} ({}):", "Reference files to create".bold(), preview.reference_files.len());
     for ref_file in &preview.reference_files {
         println!("  references/{} ({} lines)", ref_file.filename, ref_file.line_count);
     }
     println!();
 
-    println!("To apply changes, run without --dry-run flag.");
+    println!("{}", "To apply changes, run without --dry-run flag.".yellow());
 }
 
 #[cfg(test)]
