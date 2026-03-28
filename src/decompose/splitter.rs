@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::models::{RoutingOutput, SectionTiming};
-use crate::upgrade::analyzer::BloatAnalysis;
-use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent, TriggerTiming};
+use crate::decompose::analyzer::BloatAnalysis;
+use crate::decompose::semantic_analyzer::{SemanticAnalyzer, SectionIntent, TriggerTiming};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -314,7 +314,7 @@ fn extract_frontmatter(content: &str) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::upgrade::analyzer::{BloatAnalysis, SplitSuggestion};
+    use crate::decompose::analyzer::{BloatAnalysis, SplitSuggestion};
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -535,7 +535,7 @@ This section is for wave agent only.
         };
 
         // Use analyzer factory (test will be ignored if neither API key nor CLI available)
-        let detection = crate::upgrade::semantic_analyzer::new_analyzer();
+        let detection = crate::decompose::semantic_analyzer::new_analyzer();
         let result = split_content(temp_file.path(), &analysis, detection.analyzer, None)
             .await
             .unwrap();

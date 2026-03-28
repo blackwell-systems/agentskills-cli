@@ -1,5 +1,5 @@
 use crate::models::{RoutingGraph, RoutingNode};
-use crate::upgrade::semantic_analyzer::{SectionIntent, TriggerTiming};
+use crate::decompose::semantic_analyzer::{SectionIntent, TriggerTiming};
 
 /// Build routing graph from pattern detector output and semantic analysis results
 ///

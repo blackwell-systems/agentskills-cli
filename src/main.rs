@@ -1,10 +1,10 @@
-use agentskills::commands::{LintCommand, UpgradeCommand};
+use agentskills::commands::{DecomposeCommand, LintCommand};
 use clap::{Parser, Subcommand};
 use std::process;
 
 #[derive(Parser)]
 #[command(name = "agentskills")]
-#[command(version, about = "Tool for validating and upgrading Agent Skills")]
+#[command(version, about = "Tool for validating and decomposing Agent Skills")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -12,16 +12,16 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    Decompose(DecomposeCommand),
     Lint(LintCommand),
-    Upgrade(UpgradeCommand),
 }
 
 fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
+        Commands::Decompose(cmd) => agentskills::commands::decompose::run(&cmd),
         Commands::Lint(cmd) => agentskills::commands::lint::run(&cmd),
-        Commands::Upgrade(cmd) => agentskills::commands::upgrade::run(&cmd),
     };
 
     if let Err(e) = result {

@@ -1,6 +1,6 @@
 use crate::error::Error;
-use crate::models::{ SkillMetadata, UpgradeOptions};
-use crate::upgrade::pattern_detector;
+use crate::models::{ SkillMetadata, DecomposeOptions};
+use crate::decompose::pattern_detector;
 use regex::Regex;
 use std::fs;
 use std::path::Path;
@@ -26,7 +26,7 @@ pub struct SplitSuggestion {
 }
 
 /// Analyzes SKILL.md for bloat and suggests upgrades
-pub fn analyze_bloat(skill_path: &Path, options: &UpgradeOptions) -> Result<BloatAnalysis, Error> {
+pub fn analyze_bloat(skill_path: &Path, options: &DecomposeOptions) -> Result<BloatAnalysis, Error> {
     let content = fs::read_to_string(skill_path)
         .map_err(|e| Error::ValidationError(format!("Failed to read SKILL.md: {}", e)))?;
 
@@ -156,7 +156,7 @@ mod tests {
         }
 
         temp_file.write_all(content.as_bytes()).unwrap();
-        let options = UpgradeOptions {
+        let options = DecomposeOptions {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
@@ -188,7 +188,7 @@ This section has 'Steps' in the title.
 This is a small section.
 "#;
         temp_file.write_all(content.as_bytes()).unwrap();
-        let options = UpgradeOptions {
+        let options = DecomposeOptions {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
@@ -221,7 +221,7 @@ argument-hint: "/myskill [command1|command2]"
 Content here.
 "#;
         temp_file.write_all(content.as_bytes()).unwrap();
-        let options = UpgradeOptions {
+        let options = DecomposeOptions {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
@@ -254,7 +254,7 @@ allowed-tools: "Agent(subagent_type=wave-agent) Agent(subagent_type=scout)"
 Content here.
 "#;
         temp_file.write_all(content.as_bytes()).unwrap();
-        let options = UpgradeOptions {
+        let options = DecomposeOptions {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
@@ -286,7 +286,7 @@ Content here.
         content.push_str("```\n");
 
         temp_file.write_all(content.as_bytes()).unwrap();
-        let options = UpgradeOptions {
+        let options = DecomposeOptions {
             dry_run: false,
             with_agent_references: false,
             interactive: None,

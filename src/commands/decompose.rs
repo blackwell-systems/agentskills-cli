@@ -1,11 +1,11 @@
 use crate::error::Error;
-use crate::models::{RoutingStyle, UpgradeOptions};
+use crate::models::{RoutingStyle, DecomposeOptions};
 use clap::Parser;
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
 
 #[derive(Parser, Debug)]
-pub struct UpgradeCommand {
+pub struct DecomposeCommand {
     /// Path to Agent Skill directory
     pub path: PathBuf,
 
@@ -42,16 +42,16 @@ pub struct UpgradeCommand {
 /// This allows main.rs to call the command without async/await.
 /// Once main.rs is updated to use an async runtime (e.g., #[tokio::main]),
 /// it can call run_async directly.
-pub fn run(cmd: &UpgradeCommand) -> Result<(), Error> {
+pub fn run(cmd: &DecomposeCommand) -> Result<(), Error> {
     let rt = Runtime::new().map_err(|e| {
         Error::ValidationError(format!("Failed to create async runtime: {}", e))
     })?;
     rt.block_on(run_async(cmd))
 }
 
-/// Async implementation of the upgrade command.
-/// Handles interactive mode with user confirmation and calls the async upgrade_skill function.
-pub async fn run_async(cmd: &UpgradeCommand) -> Result<(), Error> {
+/// Async implementation of the decompose command.
+/// Handles interactive mode with user confirmation and calls the async decompose_skill function.
+pub async fn run_async(cmd: &DecomposeCommand) -> Result<(), Error> {
     // Parse routing style if provided
     let routing_style = cmd.routing_style.as_ref().map(|s| {
         match s.to_lowercase().as_str() {
@@ -64,7 +64,7 @@ pub async fn run_async(cmd: &UpgradeCommand) -> Result<(), Error> {
     });
 
     // Build upgrade options from command flags
-    let options = UpgradeOptions {
+    let options = DecomposeOptions {
         dry_run: cmd.dry_run,
         with_agent_references: cmd.with_agent_references,
         interactive: Some(cmd.interactive),
@@ -80,7 +80,7 @@ pub async fn run_async(cmd: &UpgradeCommand) -> Result<(), Error> {
     // If interactive mode, show preview and get user confirmation
     if cmd.interactive {
         // Note: Detailed preview (analysis results, routing graph, frontmatter changes)
-        // would be implemented here after Agent E's upgrade_skill returns structured data.
+        // would be implemented here after Agent E's decompose_skill returns structured data.
         // For now, we show a basic prompt.
         eprintln!("\n--- Preview Mode ---");
         eprintln!("Analysis complete. Changes will be applied to: {:?}", cmd.path);
@@ -93,7 +93,7 @@ pub async fn run_async(cmd: &UpgradeCommand) -> Result<(), Error> {
 
         let response = input.trim().to_lowercase();
         if response != "y" && response != "yes" {
-            eprintln!("Upgrade cancelled.");
+            eprintln!("Decompose cancelled.");
             return Ok(());
         }
     }
@@ -114,14 +114,14 @@ pub async fn run_async(cmd: &UpgradeCommand) -> Result<(), Error> {
 
     eprintln!("Splitting content...");
     eprintln!("Generating script...");
-    let preview_opt = crate::upgrade::upgrade_skill(&skill_md_path, &options).await?;
+    let preview_opt = crate::decompose::decompose_skill(&skill_md_path, &options).await?;
 
     if let Some(_preview) = preview_opt {
-        // Dry-run mode: preview_data was returned, already printed by upgrade_skill
+        // Dry-run mode: preview_data was returned, already printed by decompose_skill
         // No additional output needed here
     } else {
         // Non-dry-run mode: files were written
-        println!("✓ Upgrade complete");
+        println!("✓ Decompose complete");
     }
 
     Ok(())
@@ -133,8 +133,8 @@ mod tests {
     use clap::CommandFactory;
 
     #[test]
-    fn test_upgrade_command_parsing() {
-        let cmd = UpgradeCommand::try_parse_from(&["upgrade", "/path/to/skill"]).unwrap();
+    fn test_decompose_command_parsing() {
+        let cmd = DecomposeCommand::try_parse_from(&["decompose", "/path/to/skill"]).unwrap();
         assert_eq!(cmd.path, PathBuf::from("/path/to/skill"));
         assert!(!cmd.dry_run);
         assert!(!cmd.with_agent_references);
@@ -142,9 +142,9 @@ mod tests {
     }
 
     #[test]
-    fn test_upgrade_command_with_dry_run() {
+    fn test_decompose_command_with_dry_run() {
         let cmd =
-            UpgradeCommand::try_parse_from(&["upgrade", "/path/to/skill", "--dry-run"]).unwrap();
+            DecomposeCommand::try_parse_from(&["decompose", "/path/to/skill", "--dry-run"]).unwrap();
         assert_eq!(cmd.path, PathBuf::from("/path/to/skill"));
         assert!(cmd.dry_run);
         assert!(!cmd.with_agent_references);
@@ -152,9 +152,9 @@ mod tests {
     }
 
     #[test]
-    fn test_upgrade_command_with_agent_references() {
-        let cmd = UpgradeCommand::try_parse_from(&[
-            "upgrade",
+    fn test_decompose_command_with_agent_references() {
+        let cmd = DecomposeCommand::try_parse_from(&[
+            "decompose",
             "/path/to/skill",
             "--with-agent-references",
         ])
@@ -166,9 +166,9 @@ mod tests {
     }
 
     #[test]
-    fn test_upgrade_command_all_flags() {
-        let cmd = UpgradeCommand::try_parse_from(&[
-            "upgrade",
+    fn test_decompose_command_all_flags() {
+        let cmd = DecomposeCommand::try_parse_from(&[
+            "decompose",
             "/path/to/skill",
             "--dry-run",
             "--with-agent-references",
@@ -181,14 +181,14 @@ mod tests {
     }
 
     #[test]
-    fn test_upgrade_command_missing_path() {
-        let result = UpgradeCommand::try_parse_from(&["upgrade"]);
+    fn test_decompose_command_missing_path() {
+        let result = DecomposeCommand::try_parse_from(&["decompose"]);
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_upgrade_command_help() {
-        let mut cmd = UpgradeCommand::command();
+    fn test_decompose_command_help() {
+        let mut cmd = DecomposeCommand::command();
         let help = cmd.render_help().to_string();
         assert!(help.contains("Path to Agent Skill directory"));
         assert!(help.contains("Show changes without applying"));
@@ -196,9 +196,9 @@ mod tests {
     }
 
     #[test]
-    fn test_upgrade_command_with_interactive() {
-        let cmd = UpgradeCommand::try_parse_from(&[
-            "upgrade",
+    fn test_decompose_command_with_interactive() {
+        let cmd = DecomposeCommand::try_parse_from(&[
+            "decompose",
             "/path/to/skill",
             "--interactive",
         ])
@@ -210,9 +210,9 @@ mod tests {
     }
 
     #[test]
-    fn test_upgrade_options_interactive_field() {
-        // Test that UpgradeOptions correctly holds the interactive field
-        let options = UpgradeOptions {
+    fn test_decompose_options_interactive_field() {
+        // Test that DecomposeOptions correctly holds the interactive field
+        let options = DecomposeOptions {
             dry_run: false,
             with_agent_references: true,
             interactive: Some(true),
@@ -221,7 +221,7 @@ mod tests {
         assert_eq!(options.interactive, Some(true));
 
         // Test default behavior
-        let default_options = UpgradeOptions {
+        let default_options = DecomposeOptions {
             dry_run: false,
             with_agent_references: false,
             interactive: Some(false),

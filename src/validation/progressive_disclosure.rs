@@ -20,7 +20,7 @@ pub fn validate_progressive_disclosure(
             result.add_warning(ValidationError {
                 error_type: "skill_md_too_long".to_string(),
                 message: format!(
-                    "SKILL.md has {} lines (>200). Consider running 'agentskills upgrade' to adopt progressive disclosure",
+                    "SKILL.md has {} lines (>200). Consider running 'agentskills decompose' to adopt progressive disclosure",
                     line_count
                 ),
                 file: Some(PathBuf::from("SKILL.md")),

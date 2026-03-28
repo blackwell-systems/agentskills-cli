@@ -1,8 +1,8 @@
 use crate::error::Error;
 use crate::models::{
-    RoutingDetectionResult, RoutingStyle, SectionTiming, TimingSection, UpgradeOptions,
+    RoutingDetectionResult, RoutingStyle, SectionTiming, TimingSection, DecomposeOptions,
 };
-use crate::upgrade::pattern_detector::{extract_agent_types, extract_subcommands};
+use crate::decompose::pattern_detector::{extract_agent_types, extract_subcommands};
 use std::fs;
 use std::path::Path;
 
@@ -23,7 +23,7 @@ use std::path::Path;
 /// RoutingDetectionResult with all detected patterns and recommended routing style
 pub fn detect_routing_patterns(
     skill_path: &Path,
-    _options: &UpgradeOptions,
+    _options: &DecomposeOptions,
 ) -> Result<RoutingDetectionResult, Error> {
     // Read SKILL.md content
     let content = fs::read_to_string(skill_path)?;
@@ -106,7 +106,7 @@ Some content here.
         temp_file.write_all(content.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let options = UpgradeOptions::default();
+        let options = DecomposeOptions::default();
         let result = detect_routing_patterns(temp_file.path(), &options).unwrap();
 
         assert_eq!(result.subcommands.len(), 3);
@@ -129,7 +129,7 @@ Some content here.
         temp_file.write_all(content.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let options = UpgradeOptions::default();
+        let options = DecomposeOptions::default();
         let result = detect_routing_patterns(temp_file.path(), &options).unwrap();
 
         assert_eq!(result.subcommands.len(), 5);
@@ -202,7 +202,7 @@ More content.
         temp_file.write_all(content.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let options = UpgradeOptions::default();
+        let options = DecomposeOptions::default();
         let result = detect_routing_patterns(temp_file.path(), &options).unwrap();
 
         assert_eq!(result.subcommands.len(), 2);
@@ -230,7 +230,7 @@ Content without argument-hint or allowed-tools.
         temp_file.write_all(content.as_bytes()).unwrap();
         temp_file.flush().unwrap();
 
-        let options = UpgradeOptions::default();
+        let options = DecomposeOptions::default();
         let result = detect_routing_patterns(temp_file.path(), &options).unwrap();
 
         // Should have empty lists but not error

@@ -182,13 +182,13 @@ impl Provider {
     fn create_api_client(&self, api_key: String) -> Box<dyn SemanticAnalyzer> {
         match self {
             Provider::AnthropicApi => {
-                Box::new(crate::upgrade::anthropic_api::AnthropicApi::new(api_key))
+                Box::new(crate::decompose::anthropic_api::AnthropicApi::new(api_key))
             }
             Provider::OpenAiApi => {
-                Box::new(crate::upgrade::openai_api::OpenAiApi::new(api_key))
+                Box::new(crate::decompose::openai_api::OpenAiApi::new(api_key))
             }
             Provider::GeminiApi => {
-                Box::new(crate::upgrade::gemini_api::GeminiApi::new(api_key))
+                Box::new(crate::decompose::gemini_api::GeminiApi::new(api_key))
             }
             _ => unreachable!("create_api_client called on CLI provider"),
         }
@@ -198,13 +198,13 @@ impl Provider {
     fn create_cli_client(&self, cli_path: PathBuf) -> Box<dyn SemanticAnalyzer> {
         match self {
             Provider::AnthropicCli => {
-                Box::new(crate::upgrade::anthropic_cli::AnthropicCli::new(cli_path))
+                Box::new(crate::decompose::anthropic_cli::AnthropicCli::new(cli_path))
             }
             Provider::GeminiCli => {
-                Box::new(crate::upgrade::gemini_cli::GeminiCli::new(cli_path))
+                Box::new(crate::decompose::gemini_cli::GeminiCli::new(cli_path))
             }
             Provider::CopilotCli => {
-                Box::new(crate::upgrade::copilot_cli::CopilotCli::new(cli_path))
+                Box::new(crate::decompose::copilot_cli::CopilotCli::new(cli_path))
             }
             _ => unreachable!("create_cli_client called on API provider"),
         }

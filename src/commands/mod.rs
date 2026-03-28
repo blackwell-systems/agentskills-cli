@@ -1,5 +1,5 @@
+pub mod decompose;
 pub mod lint;
-pub mod upgrade;
 
+pub use decompose::DecomposeCommand;
 pub use lint::LintCommand;
-pub use upgrade::UpgradeCommand;

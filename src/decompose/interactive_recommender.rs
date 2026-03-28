@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::models::{RoutingDetectionResult, RoutingStyle, SectionTiming, UpgradeOptions};
+use crate::models::{RoutingDetectionResult, RoutingStyle, SectionTiming, DecomposeOptions};
 use std::io::{self, Write};
 
 /// Displays routing detection results and recommendations, gets user confirmation
@@ -20,7 +20,7 @@ use std::io::{self, Write};
 /// - Use eprintln! for preview output (stderr)
 pub fn show_interactive_preview(
     detection: &RoutingDetectionResult,
-    options: &UpgradeOptions,
+    options: &DecomposeOptions,
 ) -> Result<Option<RoutingStyle>, Error> {
     // Display detection summary
     eprintln!("\n--- Routing Analysis ---");
@@ -190,7 +190,7 @@ mod tests {
             recommended_style: RoutingStyle::Inline,
         };
 
-        let options = UpgradeOptions {
+        let options = DecomposeOptions {
             routing_style: Some(RoutingStyle::Table),
             ..Default::default()
         };

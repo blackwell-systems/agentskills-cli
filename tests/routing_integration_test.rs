@@ -1,13 +1,13 @@
 use agentskills::error::Error;
-use agentskills::models::{RoutingStyle, UpgradeOptions};
-use agentskills::upgrade::upgrade_skill;
+use agentskills::models::{RoutingStyle, DecomposeOptions};
+use agentskills::decompose::decompose_skill;
 use std::fs;
 use std::io::Write;
 use tempfile::TempDir;
 
 /// Test upgrade with routing table style
 #[tokio::test]
-async fn test_upgrade_with_routing_table_style() {
+async fn test_decompose_with_routing_table_style() {
     let temp_dir = TempDir::new().unwrap();
     let skill_path = temp_dir.path().join("SKILL.md");
     let mut file = fs::File::create(&skill_path).unwrap();
@@ -91,7 +91,7 @@ Line 30
 "#;
     writeln!(file, "{}", content).unwrap();
 
-    let options = UpgradeOptions {
+    let options = DecomposeOptions {
         dry_run: false,
         with_agent_references: false,
         interactive: None,
@@ -101,7 +101,7 @@ Line 30
         back_links: true,
     };
 
-    let result: Result<_, Error> = upgrade_skill(&skill_path, &options).await;
+    let result: Result<_, Error> = decompose_skill(&skill_path, &options).await;
     assert!(result.is_ok());
 
     // Verify routing table was created in SKILL.md
@@ -115,7 +115,7 @@ Line 30
 
 /// Test upgrade with inline style
 #[tokio::test]
-async fn test_upgrade_with_inline_style() {
+async fn test_decompose_with_inline_style() {
     let temp_dir = TempDir::new().unwrap();
     let skill_path = temp_dir.path().join("SKILL.md");
     let mut file = fs::File::create(&skill_path).unwrap();
@@ -166,7 +166,7 @@ Line 30
 "#;
     writeln!(file, "{}", content).unwrap();
 
-    let options = UpgradeOptions {
+    let options = DecomposeOptions {
         dry_run: false,
         with_agent_references: false,
         interactive: None,
@@ -176,7 +176,7 @@ Line 30
         back_links: true,
     };
 
-    let result: Result<_, Error> = upgrade_skill(&skill_path, &options).await;
+    let result: Result<_, Error> = decompose_skill(&skill_path, &options).await;
     assert!(result.is_ok());
 
     // Verify reference files were created
@@ -190,7 +190,7 @@ Line 30
 
 /// Test upgrade with back links disabled
 #[tokio::test]
-async fn test_upgrade_with_back_links_disabled() {
+async fn test_decompose_with_back_links_disabled() {
     let temp_dir = TempDir::new().unwrap();
     let skill_path = temp_dir.path().join("SKILL.md");
     let mut file = fs::File::create(&skill_path).unwrap();
@@ -240,7 +240,7 @@ Line 30
 "#;
     writeln!(file, "{}", content).unwrap();
 
-    let options = UpgradeOptions {
+    let options = DecomposeOptions {
         dry_run: false,
         with_agent_references: false,
         interactive: None,
@@ -250,7 +250,7 @@ Line 30
         back_links: false,
     };
 
-    let result: Result<_, Error> = upgrade_skill(&skill_path, &options).await;
+    let result: Result<_, Error> = decompose_skill(&skill_path, &options).await;
     assert!(result.is_ok());
 
     // Verify upgrade completed successfully
@@ -262,7 +262,7 @@ Line 30
 
 /// Test upgrade preserves existing behavior when routing=None (backwards compatibility)
 #[tokio::test]
-async fn test_upgrade_backwards_compatibility() {
+async fn test_decompose_backwards_compatibility() {
     let temp_dir = TempDir::new().unwrap();
     let skill_path = temp_dir.path().join("SKILL.md");
     let mut file = fs::File::create(&skill_path).unwrap();
@@ -312,7 +312,7 @@ Line 30
     writeln!(file, "{}", content).unwrap();
 
     // Don't specify routing_style - should use default behavior
-    let options = UpgradeOptions {
+    let options = DecomposeOptions {
         dry_run: false,
         with_agent_references: false,
         interactive: None,
@@ -322,7 +322,7 @@ Line 30
         back_links: true,
     };
 
-    let result: Result<_, Error> = upgrade_skill(&skill_path, &options).await;
+    let result: Result<_, Error> = decompose_skill(&skill_path, &options).await;
     assert!(result.is_ok());
 
     // Verify basic upgrade completed
@@ -334,10 +334,10 @@ Line 30
 #[test]
 fn test_routing_style_parsing_case_insensitive() {
     // This tests the CLI command parsing logic
-    use agentskills::commands::upgrade::UpgradeCommand;
+    use agentskills::commands::decompose::DecomposeCommand;
     use clap::Parser as _;
 
-    let cmd = UpgradeCommand::try_parse_from(&[
+    let cmd = DecomposeCommand::try_parse_from(&[
         "upgrade",
         "/path/to/skill",
         "--routing-style",
@@ -347,7 +347,7 @@ fn test_routing_style_parsing_case_insensitive() {
 
     assert_eq!(cmd.routing_style, Some("SMART".to_string()));
 
-    let cmd = UpgradeCommand::try_parse_from(&[
+    let cmd = DecomposeCommand::try_parse_from(&[
         "upgrade",
         "/path/to/skill",
         "--routing-style",
@@ -361,10 +361,10 @@ fn test_routing_style_parsing_case_insensitive() {
 /// Test timing flag
 #[test]
 fn test_timing_flag() {
-    use agentskills::commands::upgrade::UpgradeCommand;
+    use agentskills::commands::decompose::DecomposeCommand;
     use clap::Parser as _;
 
-    let cmd = UpgradeCommand::try_parse_from(&["upgrade", "/path/to/skill", "--timing"]).unwrap();
+    let cmd = DecomposeCommand::try_parse_from(&["upgrade", "/path/to/skill", "--timing"]).unwrap();
 
     assert!(cmd.timing);
 }
@@ -372,10 +372,10 @@ fn test_timing_flag() {
 /// Test back-links flag defaults to true
 #[test]
 fn test_back_links_default() {
-    use agentskills::commands::upgrade::UpgradeCommand;
+    use agentskills::commands::decompose::DecomposeCommand;
     use clap::Parser as _;
 
-    let cmd = UpgradeCommand::try_parse_from(&["upgrade", "/path/to/skill"]).unwrap();
+    let cmd = DecomposeCommand::try_parse_from(&["upgrade", "/path/to/skill"]).unwrap();
 
     assert!(cmd.back_links); // Should default to true
 }

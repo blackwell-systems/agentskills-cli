@@ -40,7 +40,7 @@ In practice: skills run at runtime. This tool shapes them before they ever run.
 
 **Runtime logic is preserved, but externalized into explicit instructions the model can execute.**
 
-Before upgrade (283 lines):
+Before decomposition (283 lines):
 ```markdown
 ## Step 8 — Diagnose failures
 If CI fails:
@@ -50,7 +50,7 @@ If CI fails:
 [30 lines of retry logic]
 ```
 
-After upgrade (core: ~160 lines):
+After decomposition (core: ~160 lines):
 ```markdown
 ## Step 8 — Diagnose failures [See references/diagnose-failures.md when CI fails]
 
@@ -106,22 +106,22 @@ Transforms large skills into progressive disclosure with semantic analysis and c
 
 ```bash
 # Preview changes (recommended first run)
-agentskills upgrade ~/.claude/skills/my-skill --dry-run
+agentskills decompose ~/.claude/skills/my-skill --dry-run
 
 # Interactive mode - confirm before applying
-agentskills upgrade ~/.claude/skills/my-skill --interactive
+agentskills decompose ~/.claude/skills/my-skill --interactive
 
 # With semantic analysis (requires ANTHROPIC_API_KEY or claude CLI)
-agentskills upgrade ~/.claude/skills/my-skill
+agentskills decompose ~/.claude/skills/my-skill
 ```
 
-**Before upgrade:**
+**Before decomposition:**
 ```
 my-skill/
 └── SKILL.md (847 lines - everything in one file)
 ```
 
-**After upgrade:**
+**After decomposition:**
 ```
 my-skill/
 ├── SKILL.md (150 lines - core with breadcrumbs)
@@ -164,7 +164,7 @@ Semantic analysis classifies WHEN each section is needed:
 
 **Example - Release skill with CI failure handling:**
 
-Before upgrade (283 lines):
+Before decomposition (283 lines):
 ```markdown
 ## Step 7 — Watch CI
 [monitoring code]
@@ -180,7 +180,7 @@ If CI fails:
 [verification code]
 ```
 
-After upgrade (core: ~160 lines):
+After decomposition (core: ~160 lines):
 ```markdown
 ## Step 7 — Watch CI
 [monitoring code]
@@ -203,7 +203,7 @@ This is **control flow externalization** - implicit runtime branches become expl
 
 ### Semantic Analysis Authentication
 
-The `upgrade` command's semantic analysis supports multiple AgentSkills-compliant providers (checked in order):
+The `decompose` command's semantic analysis supports multiple AgentSkills-compliant providers (checked in order):
 
 1. **Anthropic API** - Set `ANTHROPIC_API_KEY` environment variable
 2. **Claude CLI** - Have `claude` command available on PATH (Max plan users)
@@ -217,8 +217,8 @@ Without any provider, the tool falls back to mechanical splitting (section heade
 **Override provider selection:**
 ```bash
 # Force a specific provider instead of auto-detection
-agentskills upgrade <skill-path> --provider openai-api
-agentskills upgrade <skill-path> --provider copilot-cli
+agentskills decompose <skill-path> --provider openai-api
+agentskills decompose <skill-path> --provider copilot-cli
 
 # Valid provider names: anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli
 ```
@@ -379,10 +379,10 @@ agentskills lint ~/.claude/skills/my-skill --json | jq '.warnings'
 
 ```bash
 # See what would change
-agentskills upgrade ~/.claude/skills/my-skill --dry-run
+agentskills decompose ~/.claude/skills/my-skill --dry-run
 
 # Apply if it looks good
-agentskills upgrade ~/.claude/skills/my-skill --interactive
+agentskills decompose ~/.claude/skills/my-skill --interactive
 ```
 
 ### CI/CD integration

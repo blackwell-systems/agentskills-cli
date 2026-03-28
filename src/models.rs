@@ -103,7 +103,7 @@ pub struct RoutingGraph {
 
 /// Configuration for upgrade command
 #[derive(Debug, Clone)]
-pub struct UpgradeOptions {
+pub struct DecomposeOptions {
     pub dry_run: bool,
     pub with_agent_references: bool,
     pub interactive: Option<bool>,
@@ -113,9 +113,9 @@ pub struct UpgradeOptions {
     pub back_links: bool,
 }
 
-impl Default for UpgradeOptions {
+impl Default for DecomposeOptions {
     fn default() -> Self {
-        UpgradeOptions {
+        DecomposeOptions {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
@@ -393,16 +393,16 @@ Content
     }
 
     #[test]
-    fn test_upgrade_options_default() {
-        let default_options = UpgradeOptions::default();
+    fn test_decompose_options_default() {
+        let default_options = DecomposeOptions::default();
         assert!(!default_options.dry_run);
         assert!(!default_options.with_agent_references);
         assert_eq!(default_options.interactive, None);
     }
 
     #[test]
-    fn test_upgrade_options_with_partial_init() {
-        let options = UpgradeOptions {
+    fn test_decompose_options_with_partial_init() {
+        let options = DecomposeOptions {
             dry_run: true,
             ..Default::default()
         };
@@ -437,8 +437,8 @@ Content
     }
 
     #[test]
-    fn test_upgrade_options_with_routing() {
-        let options = UpgradeOptions {
+    fn test_decompose_options_with_routing() {
+        let options = DecomposeOptions {
             routing_style: Some(RoutingStyle::Table),
             show_timing: true,
             back_links: false,

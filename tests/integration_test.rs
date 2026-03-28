@@ -35,7 +35,7 @@ fn create_bloated_skill(dir: &TempDir) -> std::path::PathBuf {
 
     writeln!(file, "---").unwrap();
     writeln!(file, "name: bloated-skill").unwrap();
-    writeln!(file, "description: A skill that needs upgrading").unwrap();
+    writeln!(file, "description: A skill that needs decomposing").unwrap();
     writeln!(file, "argument-hint: bloated").unwrap();
     writeln!(file, "---").unwrap();
     writeln!(file).unwrap();
@@ -104,16 +104,16 @@ fn test_lint_json_output_valid() {
 }
 
 #[test]
-fn test_upgrade_dry_run_no_files_written() {
+fn test_decompose_dry_run_no_files_written() {
     let temp_dir = TempDir::new().unwrap();
     let skill_path = create_bloated_skill(&temp_dir);
 
     let mut cmd = Command::cargo_bin("agentskills").unwrap();
-    cmd.arg("upgrade").arg(&skill_path).arg("--dry-run");
+    cmd.arg("decompose").arg(&skill_path).arg("--dry-run");
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Upgrade Analysis (Dry Run)"))
+        .stdout(predicate::str::contains("Decompose Analysis (Dry Run)"))
         .stdout(predicate::str::contains("To apply changes, run without --dry-run flag"));
 
     // Verify no files were created in dry-run mode
@@ -122,16 +122,16 @@ fn test_upgrade_dry_run_no_files_written() {
 }
 
 #[test]
-fn test_upgrade_creates_directory_structure() {
+fn test_decompose_creates_directory_structure() {
     let temp_dir = TempDir::new().unwrap();
     let skill_path = create_bloated_skill(&temp_dir);
 
     let mut cmd = Command::cargo_bin("agentskills").unwrap();
-    cmd.arg("upgrade").arg(&skill_path);
+    cmd.arg("decompose").arg(&skill_path);
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Upgrade complete"));
+        .stdout(predicate::str::contains("Decompose complete"));
 
     // Verify directories were created
     assert!(temp_dir.path().join("references").exists());
@@ -139,18 +139,18 @@ fn test_upgrade_creates_directory_structure() {
 }
 
 #[test]
-fn test_upgrade_with_agent_references_flag() {
+fn test_decompose_with_agent_references_flag() {
     let temp_dir = TempDir::new().unwrap();
     let skill_path = create_bloated_skill(&temp_dir);
 
     let mut cmd = Command::cargo_bin("agentskills").unwrap();
-    cmd.arg("upgrade")
+    cmd.arg("decompose")
         .arg(&skill_path)
         .arg("--with-agent-references");
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Upgrade complete"));
+        .stdout(predicate::str::contains("Decompose complete"));
 }
 
 #[test]
@@ -171,10 +171,10 @@ fn test_cli_help_flag() {
     cmd.assert()
         .success()
         .stdout(predicate::str::contains(
-            "Tool for validating and upgrading Agent Skills",
+            "Tool for validating and decomposing Agent Skills",
         ))
         .stdout(predicate::str::contains("lint"))
-        .stdout(predicate::str::contains("upgrade"));
+        .stdout(predicate::str::contains("decompose"));
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::models::{
     PreviewData, SectionPreview, ReferenceFilePreview, BreadcrumbPreview,
-    SectionTiming, UpgradeOptions
+    SectionTiming, DecomposeOptions
 };
 use std::fs;
 use std::path::Path;
@@ -32,7 +32,7 @@ pub use routing_generator::generate_routing;
 pub use interactive_recommender::show_interactive_preview;
 
 /// Main upgrade entry point - converts Agent Skill to progressive disclosure pattern
-pub async fn upgrade_skill(skill_path: &Path, options: &UpgradeOptions) -> Result<Option<PreviewData>, Error> {
+pub async fn decompose_skill(skill_path: &Path, options: &DecomposeOptions) -> Result<Option<PreviewData>, Error> {
     // Verify SKILL.md exists
     if !skill_path.exists() {
         return Err(Error::ValidationError(format!(
@@ -203,7 +203,7 @@ fn extract_skill_name(content: &str) -> Result<String, Error> {
 
 /// Prints detailed dry-run preview to stdout
 fn print_dry_run_preview(preview: &PreviewData) {
-    println!("=== Upgrade Analysis (Dry Run) ===\n");
+    println!("=== Decompose Analysis (Dry Run) ===\n");
 
     // Size impact
     let reduction_pct = if preview.total_lines > 0 {
@@ -258,7 +258,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[tokio::test]
-    async fn test_upgrade_skill_dry_run_does_not_write() {
+    async fn test_decompose_skill_dry_run_does_not_write() {
         let temp_dir = TempDir::new().unwrap();
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
@@ -268,7 +268,7 @@ mod tests {
         )
         .unwrap();
 
-        let options = UpgradeOptions {
+        let options = DecomposeOptions {
             dry_run: true,
             with_agent_references: false,
             interactive: None,
@@ -276,7 +276,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = upgrade_skill(&skill_path, &options).await;
+        let result = decompose_skill(&skill_path, &options).await;
         assert!(result.is_ok());
 
         // Should return Some(preview_data) in dry-run mode
@@ -289,13 +289,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_upgrade_skill_dry_run_returns_preview() {
+    async fn test_decompose_skill_dry_run_returns_preview() {
         let temp_dir = TempDir::new().unwrap();
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
         writeln!(file, "---\nname: test-skill\ndescription: test\n---\n\nContent").unwrap();
 
-        let options = UpgradeOptions {
+        let options = DecomposeOptions {
             dry_run: true,
             with_agent_references: false,
             interactive: None,
@@ -303,7 +303,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = upgrade_skill(&skill_path, &options).await.unwrap();
+        let result = decompose_skill(&skill_path, &options).await.unwrap();
 
         // Should return Some(preview_data) in dry-run mode
         assert!(result.is_some());
@@ -312,7 +312,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_upgrade_skill_creates_directory_structure() {
+    async fn test_decompose_skill_creates_directory_structure() {
         let temp_dir = TempDir::new().unwrap();
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
@@ -325,7 +325,7 @@ mod tests {
         }
         writeln!(file, "{}", content).unwrap();
 
-        let options = UpgradeOptions {
+        let options = DecomposeOptions {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
@@ -333,7 +333,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = upgrade_skill(&skill_path, &options).await;
+        let result = decompose_skill(&skill_path, &options).await;
         assert!(result.is_ok());
 
         // Should return None in non-dry-run mode
@@ -350,7 +350,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_upgrade_skill_writes_reference_files() {
+    async fn test_decompose_skill_writes_reference_files() {
         let temp_dir = TempDir::new().unwrap();
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
@@ -362,7 +362,7 @@ mod tests {
         }
         writeln!(file, "{}", content).unwrap();
 
-        let options = UpgradeOptions {
+        let options = DecomposeOptions {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
@@ -370,7 +370,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = upgrade_skill(&skill_path, &options).await;
+        let result = decompose_skill(&skill_path, &options).await;
         assert!(result.is_ok());
 
         // Should return None in non-dry-run mode
@@ -390,7 +390,7 @@ mod tests {
 
     #[tokio::test]
     #[cfg(unix)]
-    async fn test_upgrade_skill_sets_script_executable() {
+    async fn test_decompose_skill_sets_script_executable() {
         use std::os::unix::fs::PermissionsExt;
 
         let temp_dir = TempDir::new().unwrap();
@@ -404,7 +404,7 @@ mod tests {
         }
         writeln!(file, "{}", content).unwrap();
 
-        let options = UpgradeOptions {
+        let options = DecomposeOptions {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
@@ -412,7 +412,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = upgrade_skill(&skill_path, &options).await;
+        let result = decompose_skill(&skill_path, &options).await;
         assert!(result.is_ok());
 
         // Should return None in non-dry-run mode
@@ -426,8 +426,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_upgrade_skill_validates_path() {
-        let options = UpgradeOptions {
+    async fn test_decompose_skill_validates_path() {
+        let options = DecomposeOptions {
             dry_run: false,
             with_agent_references: false,
             interactive: None,
@@ -435,7 +435,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = upgrade_skill(Path::new("/nonexistent/SKILL.md"), &options).await;
+        let result = decompose_skill(Path::new("/nonexistent/SKILL.md"), &options).await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::ValidationError(_)));
     }

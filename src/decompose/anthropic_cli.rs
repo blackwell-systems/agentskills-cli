@@ -1,25 +1,25 @@
 use crate::error::Error;
-use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
+use crate::decompose::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Command;
 
-/// CLI-based analyzer using GitHub Copilot CLI
+/// CLI-based Anthropic analyzer that shells out to `claude` command
 ///
-/// Shells out to `copilot` command (requires GitHub Copilot subscription)
-pub struct CopilotCli {
-    copilot_path: PathBuf,
+/// Mirrors the implementation in scout-and-wave-go/pkg/agent/backend/cli/client.go
+pub struct AnthropicCli {
+    claude_path: PathBuf,
 }
 
-impl CopilotCli {
-    /// Create a new Copilot CLI analyzer with the given path to the copilot binary
-    pub fn new(copilot_path: PathBuf) -> Self {
-        Self { copilot_path }
+impl AnthropicCli {
+    /// Create a new Anthropic CLI analyzer with the given path to the claude binary
+    pub fn new(claude_path: PathBuf) -> Self {
+        Self { claude_path }
     }
 }
 
 #[async_trait]
-impl SemanticAnalyzer for CopilotCli {
+impl SemanticAnalyzer for AnthropicCli {
     async fn analyze_section(
         &self,
         section_header: &str,
@@ -32,7 +32,7 @@ impl SemanticAnalyzer for CopilotCli {
             section_content
         };
 
-        // Construct analysis prompt (same as other providers)
+        // Construct analysis prompt (same as API client)
         let prompt = format!(
             r#"This is a section from an Agent Skill. Section header: "{section_header}".
 
@@ -64,52 +64,33 @@ Respond ONLY with valid JSON in this exact format:
 }}"#
         );
 
-        // Shell out to copilot
-        // Use -p for non-interactive mode with --allow-all-tools
-        // Note: GITHUB_TOKEN env var must not contain classic PAT (ghp_)
-        let output = Command::new(&self.copilot_path)
+        // Shell out to claude CLI
+        // Use --print (no tool execution)
+        let output = Command::new(&self.claude_path)
+            .arg("--print")
             .arg("-p")
-            .arg(&prompt)
-            .arg("--allow-all-tools")
-            .env_remove("GITHUB_TOKEN") // Remove classic PAT if present
+            .arg(prompt)
             .output()
-            .map_err(|e| {
-                Error::ValidationError(format!("Failed to execute copilot CLI: {}", e))
-            })?;
+            .map_err(|e| Error::ValidationError(format!("Failed to execute claude CLI: {}", e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(Error::ApiError(format!(
-                "copilot CLI exited with status {}: {}",
+                "claude CLI exited with status {}: {}",
                 output.status, stderr
             )));
         }
 
-        // Parse stdout as JSON (strip markdown code fences and usage stats)
+        // Parse stdout as JSON (strip markdown code fences if present)
         let stdout = String::from_utf8_lossy(&output.stdout);
-
-        // Find the JSON content between code fences or before usage stats
-        let json_str = stdout
-            .lines()
-            .skip_while(|line| !line.trim().starts_with('{')) // Skip until JSON starts
-            .take_while(|line| {
-                // Stop at usage stats or empty lines after JSON
-                !line.starts_with("Total usage")
-                    && !line.starts_with("API time")
-                    && !line.starts_with("Breakdown")
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-            .trim()
+        let json_str = stdout.trim()
             .trim_start_matches("```json")
             .trim_start_matches("```")
             .trim_end_matches("```")
-            .trim()
-            .to_string();
-
-        let intent: SectionIntent = serde_json::from_str(&json_str).map_err(|e| {
+            .trim();
+        let intent: SectionIntent = serde_json::from_str(json_str).map_err(|e| {
             Error::ApiError(format!(
-                "Failed to parse copilot CLI response as JSON: {}. Response: {}",
+                "Failed to parse claude CLI response as JSON: {}. Response: {}",
                 e, stdout
             ))
         })?;
@@ -121,27 +102,28 @@ Respond ONLY with valid JSON in this exact format:
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
-    fn test_copilot_cli_new() {
-        let analyzer = CopilotCli::new(PathBuf::from("/usr/local/bin/copilot"));
+    fn test_anthropic_cli_new() {
+        let analyzer = AnthropicCli::new(PathBuf::from("/usr/local/bin/claude"));
         assert_eq!(
-            analyzer.copilot_path,
-            PathBuf::from("/usr/local/bin/copilot")
+            analyzer.claude_path,
+            PathBuf::from("/usr/local/bin/claude")
         );
     }
 
     #[tokio::test]
-    #[ignore] // Requires copilot CLI installed
+    #[ignore] // Requires claude CLI installed
     async fn test_analyze_section_with_cli() {
-        // Try to find copilot on PATH
-        let copilot_path = which::which("copilot");
-        if copilot_path.is_err() {
-            eprintln!("copilot CLI not found on PATH, skipping test");
+        // Try to find claude on PATH
+        let claude_path = which::which("claude");
+        if claude_path.is_err() {
+            eprintln!("claude CLI not found on PATH, skipping test");
             return;
         }
 
-        let analyzer = CopilotCli::new(copilot_path.unwrap());
+        let analyzer = AnthropicCli::new(claude_path.unwrap());
         let result = analyzer
             .analyze_section(
                 "Scout Agent Instructions",
@@ -156,13 +138,16 @@ mod tests {
     }
 
     #[test]
-    fn test_copilot_cli_invalid_binary() {
-        let analyzer = CopilotCli::new(PathBuf::from("/nonexistent/copilot"));
+    fn test_anthropic_cli_invalid_binary() {
+        let analyzer = AnthropicCli::new(PathBuf::from("/nonexistent/claude"));
         let runtime = tokio::runtime::Runtime::new().unwrap();
-        let result = runtime.block_on(analyzer.analyze_section("Test", "Test content"));
+        let result = runtime.block_on(analyzer.analyze_section(
+            "Test",
+            "Test content",
+        ));
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("Failed to execute copilot CLI"));
+        assert!(err_msg.contains("Failed to execute claude CLI"));
     }
 }

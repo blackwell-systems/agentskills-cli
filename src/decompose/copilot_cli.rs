@@ -1,23 +1,25 @@
 use crate::error::Error;
-use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
+use crate::decompose::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Command;
 
-/// CLI-based Gemini analyzer that shells out to `gemini` command
-pub struct GeminiCli {
-    gemini_path: PathBuf,
+/// CLI-based analyzer using GitHub Copilot CLI
+///
+/// Shells out to `copilot` command (requires GitHub Copilot subscription)
+pub struct CopilotCli {
+    copilot_path: PathBuf,
 }
 
-impl GeminiCli {
-    /// Create a new Gemini CLI analyzer with the given path to the gemini binary
-    pub fn new(gemini_path: PathBuf) -> Self {
-        Self { gemini_path }
+impl CopilotCli {
+    /// Create a new Copilot CLI analyzer with the given path to the copilot binary
+    pub fn new(copilot_path: PathBuf) -> Self {
+        Self { copilot_path }
     }
 }
 
 #[async_trait]
-impl SemanticAnalyzer for GeminiCli {
+impl SemanticAnalyzer for CopilotCli {
     async fn analyze_section(
         &self,
         section_header: &str,
@@ -62,33 +64,52 @@ Respond ONLY with valid JSON in this exact format:
 }}"#
         );
 
-        // Shell out to gemini CLI
-        // Use -p for headless mode (non-interactive)
-        let output = Command::new(&self.gemini_path)
+        // Shell out to copilot
+        // Use -p for non-interactive mode with --allow-all-tools
+        // Note: GITHUB_TOKEN env var must not contain classic PAT (ghp_)
+        let output = Command::new(&self.copilot_path)
             .arg("-p")
-            .arg(prompt)
+            .arg(&prompt)
+            .arg("--allow-all-tools")
+            .env_remove("GITHUB_TOKEN") // Remove classic PAT if present
             .output()
-            .map_err(|e| Error::ValidationError(format!("Failed to execute gemini CLI: {}", e)))?;
+            .map_err(|e| {
+                Error::ValidationError(format!("Failed to execute copilot CLI: {}", e))
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(Error::ApiError(format!(
-                "gemini CLI exited with status {}: {}",
+                "copilot CLI exited with status {}: {}",
                 output.status, stderr
             )));
         }
 
-        // Parse stdout as JSON (strip markdown code fences if present)
+        // Parse stdout as JSON (strip markdown code fences and usage stats)
         let stdout = String::from_utf8_lossy(&output.stdout);
+
+        // Find the JSON content between code fences or before usage stats
         let json_str = stdout
+            .lines()
+            .skip_while(|line| !line.trim().starts_with('{')) // Skip until JSON starts
+            .take_while(|line| {
+                // Stop at usage stats or empty lines after JSON
+                !line.starts_with("Total usage")
+                    && !line.starts_with("API time")
+                    && !line.starts_with("Breakdown")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
             .trim()
             .trim_start_matches("```json")
             .trim_start_matches("```")
             .trim_end_matches("```")
-            .trim();
-        let intent: SectionIntent = serde_json::from_str(json_str).map_err(|e| {
+            .trim()
+            .to_string();
+
+        let intent: SectionIntent = serde_json::from_str(&json_str).map_err(|e| {
             Error::ApiError(format!(
-                "Failed to parse gemini CLI response as JSON: {}. Response: {}",
+                "Failed to parse copilot CLI response as JSON: {}. Response: {}",
                 e, stdout
             ))
         })?;
@@ -102,25 +123,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_gemini_cli_new() {
-        let analyzer = GeminiCli::new(PathBuf::from("/usr/local/bin/gemini"));
+    fn test_copilot_cli_new() {
+        let analyzer = CopilotCli::new(PathBuf::from("/usr/local/bin/copilot"));
         assert_eq!(
-            analyzer.gemini_path,
-            PathBuf::from("/usr/local/bin/gemini")
+            analyzer.copilot_path,
+            PathBuf::from("/usr/local/bin/copilot")
         );
     }
 
     #[tokio::test]
-    #[ignore] // Requires gemini CLI installed
+    #[ignore] // Requires copilot CLI installed
     async fn test_analyze_section_with_cli() {
-        // Try to find gemini on PATH
-        let gemini_path = which::which("gemini");
-        if gemini_path.is_err() {
-            eprintln!("gemini CLI not found on PATH, skipping test");
+        // Try to find copilot on PATH
+        let copilot_path = which::which("copilot");
+        if copilot_path.is_err() {
+            eprintln!("copilot CLI not found on PATH, skipping test");
             return;
         }
 
-        let analyzer = GeminiCli::new(gemini_path.unwrap());
+        let analyzer = CopilotCli::new(copilot_path.unwrap());
         let result = analyzer
             .analyze_section(
                 "Scout Agent Instructions",
@@ -135,13 +156,13 @@ mod tests {
     }
 
     #[test]
-    fn test_gemini_cli_invalid_binary() {
-        let analyzer = GeminiCli::new(PathBuf::from("/nonexistent/gemini"));
+    fn test_copilot_cli_invalid_binary() {
+        let analyzer = CopilotCli::new(PathBuf::from("/nonexistent/copilot"));
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let result = runtime.block_on(analyzer.analyze_section("Test", "Test content"));
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("Failed to execute gemini CLI"));
+        assert!(err_msg.contains("Failed to execute copilot CLI"));
     }
 }

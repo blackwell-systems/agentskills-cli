@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::upgrade::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
+use crate::decompose::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
 use async_openai::config::OpenAIConfig;
 use async_openai::types::{
     ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
