@@ -27,6 +27,7 @@ impl fmt::Display for DetectionFailure {
 pub struct DetectionResult {
     pub analyzer: Option<Box<dyn SemanticAnalyzer>>,
     pub attempts: Vec<(String, DetectionFailure)>,
+    pub provider_name: Option<String>,
 }
 
 impl DetectionResult {
@@ -35,6 +36,7 @@ impl DetectionResult {
         Self {
             analyzer: None,
             attempts,
+            provider_name: None,
         }
     }
 
@@ -241,6 +243,7 @@ pub fn new_analyzer() -> DetectionResult {
                 return DetectionResult {
                     analyzer: Some(analyzer),
                     attempts: vec![], // Success case - no failures to report
+                    provider_name: Some(provider.name().to_string()),
                 }
             }
             Err(failure) => {
@@ -281,6 +284,7 @@ pub fn new_analyzer_by_name(provider_name: &str) -> DetectionResult {
                         provider_name
                     )),
                 )],
+                provider_name: None,
             };
         }
     };
@@ -289,10 +293,12 @@ pub fn new_analyzer_by_name(provider_name: &str) -> DetectionResult {
         Ok(analyzer) => DetectionResult {
             analyzer: Some(analyzer),
             attempts: vec![],
+            provider_name: Some(provider.name().to_string()),
         },
         Err(failure) => DetectionResult {
             analyzer: None,
             attempts: vec![(provider.name().to_string(), failure)],
+            provider_name: None,
         },
     }
 }

@@ -62,10 +62,12 @@ pub async fn decompose_skill(skill_path: &Path, options: &DecomposeOptions) -> R
         semantic_analyzer::new_analyzer()
     };
 
-    // If no analyzer found, print helpful error message
-    if detection.analyzer.is_none() {
+    // Print provider status
+    if let Some(ref provider_name) = detection.provider_name {
+        eprintln!("{} {}", "Using".dimmed(), provider_name.cyan());
+    } else {
         eprintln!("{}", detection.error_message());
-        eprintln!("\nContinuing with mechanical splitting...\n");
+        eprintln!("\n{}\n", "Continuing with mechanical splitting...".yellow());
     }
 
     // Step 1.5: Detect routing patterns
