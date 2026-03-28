@@ -93,7 +93,6 @@ Line 30
 
     let options = DecomposeOptions {
         dry_run: false,
-        with_agent_references: false,
         interactive: None,
         provider: None,
         routing_style: Some(RoutingStyle::Table),
@@ -168,7 +167,6 @@ Line 30
 
     let options = DecomposeOptions {
         dry_run: false,
-        with_agent_references: false,
         interactive: None,
         provider: None,
         routing_style: Some(RoutingStyle::Inline),
@@ -242,7 +240,6 @@ Line 30
 
     let options = DecomposeOptions {
         dry_run: false,
-        with_agent_references: false,
         interactive: None,
         provider: None,
         routing_style: Some(RoutingStyle::Inline),
@@ -314,7 +311,6 @@ Line 30
     // Don't specify routing_style - should use default behavior
     let options = DecomposeOptions {
         dry_run: false,
-        with_agent_references: false,
         interactive: None,
         provider: None,
         routing_style: None,

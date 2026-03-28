@@ -5,13 +5,12 @@ use regex::Regex;
 use std::fs;
 use std::path::Path;
 
-/// Analysis result from scanning SKILL.md for upgrade opportunities
+/// Analysis result from scanning SKILL.md for decompose opportunities
 #[derive(Debug, Clone)]
 pub struct BloatAnalysis {
     pub total_lines: usize,
     pub suggested_splits: Vec<SplitSuggestion>,
     pub trigger_patterns: Vec<String>,
-    pub needs_agent_references: bool,
     pub subcommands: Vec<String>,
     pub agent_types: Vec<String>,
 }
@@ -25,8 +24,8 @@ pub struct SplitSuggestion {
     pub target_file: String,
 }
 
-/// Analyzes SKILL.md for bloat and suggests upgrades
-pub fn analyze_bloat(skill_path: &Path, options: &DecomposeOptions) -> Result<BloatAnalysis, Error> {
+/// Analyzes SKILL.md for bloat and suggests decomposition
+pub fn analyze_bloat(skill_path: &Path, _options: &DecomposeOptions) -> Result<BloatAnalysis, Error> {
     let content = fs::read_to_string(skill_path)
         .map_err(|e| Error::ValidationError(format!("Failed to read SKILL.md: {}", e)))?;
 
@@ -133,7 +132,6 @@ pub fn analyze_bloat(skill_path: &Path, options: &DecomposeOptions) -> Result<Bl
         total_lines,
         suggested_splits,
         trigger_patterns,
-        needs_agent_references: options.with_agent_references,
         subcommands,
         agent_types,
     })
@@ -158,7 +156,6 @@ mod tests {
         temp_file.write_all(content.as_bytes()).unwrap();
         let options = DecomposeOptions {
             dry_run: false,
-            with_agent_references: false,
             interactive: None,
             ..Default::default()
         };
@@ -190,7 +187,6 @@ This is a small section.
         temp_file.write_all(content.as_bytes()).unwrap();
         let options = DecomposeOptions {
             dry_run: false,
-            with_agent_references: false,
             interactive: None,
             ..Default::default()
         };
@@ -223,7 +219,6 @@ Content here.
         temp_file.write_all(content.as_bytes()).unwrap();
         let options = DecomposeOptions {
             dry_run: false,
-            with_agent_references: false,
             interactive: None,
             ..Default::default()
         };
@@ -256,7 +251,6 @@ Content here.
         temp_file.write_all(content.as_bytes()).unwrap();
         let options = DecomposeOptions {
             dry_run: false,
-            with_agent_references: false,
             interactive: None,
             ..Default::default()
         };
@@ -288,7 +282,6 @@ Content here.
         temp_file.write_all(content.as_bytes()).unwrap();
         let options = DecomposeOptions {
             dry_run: false,
-            with_agent_references: false,
             interactive: None,
             ..Default::default()
         };

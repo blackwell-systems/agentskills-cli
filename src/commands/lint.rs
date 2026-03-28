@@ -5,11 +5,26 @@ use colored::Colorize;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
+#[command(about = "Validate Agent Skill frontmatter and structure")]
+#[command(after_help = "\
+CHECKS:
+  • Required fields: name, description
+  • Optional fields: argument-hint, triggers, agent-references
+  • Progressive disclosure: references/ structure, inject script
+  • Frontmatter syntax and YAML validity
+
+EXAMPLES:
+  # Human-readable output with colors
+  agentskills lint ~/.claude/skills/my-skill
+
+  # Machine-readable JSON for CI/CD
+  agentskills lint ~/.claude/skills/my-skill --json
+")]
 pub struct LintCommand {
-    /// Path to Agent Skill directory
+    /// Path to SKILL.md or skill directory
     pub path: PathBuf,
 
-    /// Output as JSON instead of colored text
+    /// Output validation results as JSON
     #[arg(long)]
     pub json: bool,
 }
@@ -95,7 +110,7 @@ mod tests {
     fn test_lint_command_help() {
         let mut cmd = LintCommand::command();
         let help = cmd.render_help().to_string();
-        assert!(help.contains("Path to Agent Skill directory"));
-        assert!(help.contains("Output as JSON"));
+        assert!(help.contains("Path to SKILL.md or skill directory"));
+        assert!(help.contains("Output validation results as JSON"));
     }
 }

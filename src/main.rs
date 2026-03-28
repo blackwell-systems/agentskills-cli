@@ -12,7 +12,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Split large skills into core + reference files for better context economy
     Decompose(DecomposeCommand),
+    /// Validate Agent Skill frontmatter and structure
     Lint(LintCommand),
 }
 

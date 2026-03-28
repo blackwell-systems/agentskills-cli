@@ -270,7 +270,6 @@ mod tests {
 
         let options = DecomposeOptions {
             dry_run: true,
-            with_agent_references: false,
             interactive: None,
             provider: None,
             ..Default::default()
@@ -297,7 +296,6 @@ mod tests {
 
         let options = DecomposeOptions {
             dry_run: true,
-            with_agent_references: false,
             interactive: None,
             provider: None,
             ..Default::default()
@@ -327,7 +325,6 @@ mod tests {
 
         let options = DecomposeOptions {
             dry_run: false,
-            with_agent_references: false,
             interactive: None,
             provider: None,
             ..Default::default()
@@ -364,7 +361,6 @@ mod tests {
 
         let options = DecomposeOptions {
             dry_run: false,
-            with_agent_references: false,
             interactive: None,
             provider: None,
             ..Default::default()
@@ -406,7 +402,6 @@ mod tests {
 
         let options = DecomposeOptions {
             dry_run: false,
-            with_agent_references: false,
             interactive: None,
             provider: None,
             ..Default::default()
@@ -429,7 +424,6 @@ mod tests {
     async fn test_decompose_skill_validates_path() {
         let options = DecomposeOptions {
             dry_run: false,
-            with_agent_references: false,
             interactive: None,
             provider: None,
             ..Default::default()

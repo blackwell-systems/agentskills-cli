@@ -5,35 +5,52 @@ use std::path::PathBuf;
 use tokio::runtime::Runtime;
 
 #[derive(Parser, Debug)]
+#[command(about = "Split large skills into core + reference files")]
+#[command(after_help = "\
+WORKFLOW:
+  1. Detects bloat (implementation sections, command catalogs)
+  2. Extracts to references/ directory
+  3. Generates routing (triggers, agent-references, inject script)
+  4. Updates SKILL.md with links to extracted content
+
+EXAMPLES:
+  # Preview changes first
+  agentskills decompose ~/.claude/skills/my-skill --dry-run
+
+  # Apply with confirmation
+  agentskills decompose ~/.claude/skills/my-skill --interactive
+
+  # Generate routing table format
+  agentskills decompose ~/.claude/skills/my-skill --routing-style table
+
+  # Use specific AI provider
+  agentskills decompose ~/.claude/skills/my-skill --provider gemini-api
+")]
 pub struct DecomposeCommand {
-    /// Path to Agent Skill directory
+    /// Path to SKILL.md or skill directory
     pub path: PathBuf,
 
-    /// Show changes without applying them
+    /// Preview changes without writing files
     #[arg(long)]
     pub dry_run: bool,
 
-    /// Add agent-references frontmatter field
-    #[arg(long)]
-    pub with_agent_references: bool,
-
-    /// Show reasoning and preview before applying changes
+    /// Show AI reasoning and confirm before applying
     #[arg(long)]
     pub interactive: bool,
 
-    /// Semantic analysis provider (anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli)
+    /// AI provider (auto-detects if omitted): anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli
     #[arg(long, value_name = "PROVIDER")]
     pub provider: Option<String>,
 
-    /// Routing style (smart, inline, table, none)
+    /// Routing format: smart (auto), inline, table, or none
     #[arg(long, value_name = "STYLE")]
     pub routing_style: Option<String>,
 
-    /// Show timing annotations in routing
+    /// Add timing labels (invocation-time vs runtime)
     #[arg(long)]
     pub timing: bool,
 
-    /// Generate back-links in reference files
+    /// Add back-links in reference files to core SKILL.md
     #[arg(long, default_value = "true")]
     pub back_links: bool,
 }
@@ -66,7 +83,6 @@ pub async fn run_async(cmd: &DecomposeCommand) -> Result<(), Error> {
     // Build upgrade options from command flags
     let options = DecomposeOptions {
         dry_run: cmd.dry_run,
-        with_agent_references: cmd.with_agent_references,
         interactive: Some(cmd.interactive),
         provider: cmd.provider.clone(),
         routing_style,
@@ -137,7 +153,6 @@ mod tests {
         let cmd = DecomposeCommand::try_parse_from(&["decompose", "/path/to/skill"]).unwrap();
         assert_eq!(cmd.path, PathBuf::from("/path/to/skill"));
         assert!(!cmd.dry_run);
-        assert!(!cmd.with_agent_references);
         assert!(!cmd.interactive);
     }
 
@@ -147,21 +162,6 @@ mod tests {
             DecomposeCommand::try_parse_from(&["decompose", "/path/to/skill", "--dry-run"]).unwrap();
         assert_eq!(cmd.path, PathBuf::from("/path/to/skill"));
         assert!(cmd.dry_run);
-        assert!(!cmd.with_agent_references);
-        assert!(!cmd.interactive);
-    }
-
-    #[test]
-    fn test_decompose_command_with_agent_references() {
-        let cmd = DecomposeCommand::try_parse_from(&[
-            "decompose",
-            "/path/to/skill",
-            "--with-agent-references",
-        ])
-        .unwrap();
-        assert_eq!(cmd.path, PathBuf::from("/path/to/skill"));
-        assert!(!cmd.dry_run);
-        assert!(cmd.with_agent_references);
         assert!(!cmd.interactive);
     }
 
@@ -171,13 +171,12 @@ mod tests {
             "decompose",
             "/path/to/skill",
             "--dry-run",
-            "--with-agent-references",
+            "--interactive",
         ])
         .unwrap();
         assert_eq!(cmd.path, PathBuf::from("/path/to/skill"));
         assert!(cmd.dry_run);
-        assert!(cmd.with_agent_references);
-        assert!(!cmd.interactive);
+        assert!(cmd.interactive);
     }
 
     #[test]
@@ -190,9 +189,8 @@ mod tests {
     fn test_decompose_command_help() {
         let mut cmd = DecomposeCommand::command();
         let help = cmd.render_help().to_string();
-        assert!(help.contains("Path to Agent Skill directory"));
-        assert!(help.contains("Show changes without applying"));
-        assert!(help.contains("Add agent-references"));
+        assert!(help.contains("Path to SKILL.md or skill directory"));
+        assert!(help.contains("Preview changes without writing"));
     }
 
     #[test]
@@ -205,7 +203,6 @@ mod tests {
         .unwrap();
         assert_eq!(cmd.path, PathBuf::from("/path/to/skill"));
         assert!(!cmd.dry_run);
-        assert!(!cmd.with_agent_references);
         assert!(cmd.interactive);
     }
 
@@ -214,7 +211,6 @@ mod tests {
         // Test that DecomposeOptions correctly holds the interactive field
         let options = DecomposeOptions {
             dry_run: false,
-            with_agent_references: true,
             interactive: Some(true),
             ..Default::default()
         };
@@ -223,7 +219,6 @@ mod tests {
         // Test default behavior
         let default_options = DecomposeOptions {
             dry_run: false,
-            with_agent_references: false,
             interactive: Some(false),
             ..Default::default()
         };
@@ -231,7 +226,7 @@ mod tests {
 
         // Note: End-to-end interactive test requires stdin mocking, which is complex.
         // Interactive mode should be tested manually by running:
-        // cargo run -- upgrade /path/to/skill --interactive
+        // cargo run -- decompose /path/to/skill --interactive
         // and verifying the prompt appears and user input is correctly handled.
     }
 }

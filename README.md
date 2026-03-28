@@ -1,6 +1,6 @@
 # agentskills-cli
 
-CLI for validating and upgrading [Agent Skills](https://agentskills.io/specification) with control-flow awareness.
+CLI for validating and decomposing [Agent Skills](https://agentskills.io/specification) with control-flow awareness.
 
 Converts large, monolithic skills into structured, portable programs by:
 - Splitting content into progressive disclosure
@@ -16,7 +16,7 @@ Agent Skills defines a portable format for reusable AI agent capabilities.
 This CLI is the enforcement and migration layer for that ecosystem. It validates skills against the spec and evolves existing skills toward that standard:
 
 - Validate skills against the official spec
-- Upgrade large skills into progressive disclosure (intelligent splitting with semantic routing)
+- Decompose large skills into progressive disclosure (intelligent splitting with semantic routing)
 - Detect vendor extensions and non-standard fields
 
 ## Why a CLI instead of a skill?
@@ -28,6 +28,22 @@ Progressive disclosure is a structural concern: it determines what enters the mo
 This CLI moves that work to build time. It analyzes, restructures, and generates routing ahead of execution, producing deterministic, reusable artifacts that never require the model to process the full skill again. This avoids requiring the model to reason over the full skill at runtime.
 
 In practice: skills run at runtime. This tool shapes them before they ever run.
+
+## Quick Start
+
+```bash
+# 1. Validate an existing skill
+agentskills lint ~/.claude/skills/my-skill
+
+# 2. Check if decomposition would help
+agentskills decompose ~/.claude/skills/my-skill --dry-run
+
+# 3. Apply decomposition with confirmation
+agentskills decompose ~/.claude/skills/my-skill --interactive
+
+# 4. Generate routing table format
+agentskills decompose ~/.claude/skills/my-skill --routing-style table
+```
 
 ## When to use this
 
@@ -89,7 +105,7 @@ agentskills lint ~/.claude/skills/my-skill --json
 ⚠ Warning: SKILL.md exceeds 200-line recommendation (347 lines)
 ```
 
-### Upgrade - Progressive Disclosure
+### Decompose - Progressive Disclosure
 
 Transforms large skills into progressive disclosure with semantic analysis and control-flow awareness.
 
@@ -354,10 +370,10 @@ cargo fmt
 
 ```
 src/
-├── commands/       # CLI command handlers (lint, upgrade)
+├── commands/       # CLI command handlers (lint, decompose)
 ├── models.rs       # Skill metadata, routing graph, config
 ├── validation/     # Spec validators (base, extensions, progressive disclosure)
-└── upgrade/        # Progressive disclosure modules
+└── decompose/      # Progressive disclosure modules
     ├── analyzer.rs          # Bloat detection
     ├── pattern_detector.rs  # Frontmatter extraction
     ├── semantic_analyzer.rs # Claude API integration
@@ -369,13 +385,13 @@ src/
 
 ## Examples
 
-### Validate before upgrading
+### Validate before decomposing
 
 ```bash
 agentskills lint ~/.claude/skills/my-skill --json | jq '.warnings'
 ```
 
-### Upgrade with preview
+### Decompose with preview
 
 ```bash
 # See what would change

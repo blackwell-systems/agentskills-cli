@@ -345,7 +345,6 @@ Content 2
                 target_file: "section-1.md".to_string(),
             }],
             trigger_patterns: vec!["/test".to_string()],
-            needs_agent_references: false,
             subcommands: vec![],
             agent_types: vec![],
         };
@@ -374,7 +373,6 @@ Content here
             total_lines: 3,
             suggested_splits: vec![],
             trigger_patterns: vec!["/test".to_string(), "test:".to_string()],
-            needs_agent_references: false,
             subcommands: vec![],
             agent_types: vec![],
         };
@@ -402,7 +400,6 @@ Content here
             total_lines: 7,
             suggested_splits: vec![],
             trigger_patterns: vec!["/existing".to_string()],
-            needs_agent_references: false,
             subcommands: vec![],
             agent_types: vec![],
         };
@@ -439,7 +436,6 @@ Content to extract
                 target_file: "reference-section.md".to_string(),
             }],
             trigger_patterns: vec!["/test".to_string()],
-            needs_agent_references: true,
             subcommands: vec![],
             agent_types: vec![],
         };
@@ -478,7 +474,6 @@ Content here
                 target_file: "section-1.md".to_string(),
             }],
             trigger_patterns: vec![],
-            needs_agent_references: false,
             subcommands: vec![],
             agent_types: vec![],
         };
@@ -529,7 +524,6 @@ This section is for wave agent only.
                 },
             ],
             trigger_patterns: vec!["/test".to_string()],
-            needs_agent_references: true,
             subcommands: vec![],
             agent_types: vec![],
         };

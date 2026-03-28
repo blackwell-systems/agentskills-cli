@@ -101,11 +101,10 @@ pub struct RoutingGraph {
     pub nodes: Vec<RoutingNode>,
 }
 
-/// Configuration for upgrade command
+/// Configuration for decompose command
 #[derive(Debug, Clone)]
 pub struct DecomposeOptions {
     pub dry_run: bool,
-    pub with_agent_references: bool,
     pub interactive: Option<bool>,
     pub provider: Option<String>,
     pub routing_style: Option<RoutingStyle>,
@@ -117,7 +116,6 @@ impl Default for DecomposeOptions {
     fn default() -> Self {
         DecomposeOptions {
             dry_run: false,
-            with_agent_references: false,
             interactive: None,
             provider: None,
             routing_style: None,
@@ -396,8 +394,8 @@ Content
     fn test_decompose_options_default() {
         let default_options = DecomposeOptions::default();
         assert!(!default_options.dry_run);
-        assert!(!default_options.with_agent_references);
         assert_eq!(default_options.interactive, None);
+        assert!(default_options.back_links);
     }
 
     #[test]
@@ -407,8 +405,8 @@ Content
             ..Default::default()
         };
         assert!(options.dry_run);
-        assert!(!options.with_agent_references);
         assert_eq!(options.interactive, None);
+        assert!(options.back_links);
     }
 
     #[test]

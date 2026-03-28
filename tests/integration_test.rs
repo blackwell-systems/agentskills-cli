@@ -139,21 +139,6 @@ fn test_decompose_creates_directory_structure() {
 }
 
 #[test]
-fn test_decompose_with_agent_references_flag() {
-    let temp_dir = TempDir::new().unwrap();
-    let skill_path = create_bloated_skill(&temp_dir);
-
-    let mut cmd = Command::cargo_bin("agentskills").unwrap();
-    cmd.arg("decompose")
-        .arg(&skill_path)
-        .arg("--with-agent-references");
-
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains("Decompose complete"));
-}
-
-#[test]
 fn test_cli_version_flag() {
     let mut cmd = Command::cargo_bin("agentskills").unwrap();
     cmd.arg("--version");
