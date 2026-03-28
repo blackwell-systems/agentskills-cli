@@ -10,9 +10,10 @@ use tokio::runtime::Runtime;
 #[command(after_help = "\
 WORKFLOW:
   1. Detects bloat (implementation sections, command catalogs)
-  2. Extracts to references/ directory
-  3. Generates routing (triggers, agent-references, inject script)
-  4. Updates SKILL.md with links to extracted content
+  2. Extracts sections to references/ directory
+  3. Generates inject-context script for loading references
+  4. Adds breadcrumbs to SKILL.md for runtime sections
+  5. Preserves existing frontmatter unchanged
 
 EXAMPLES:
   # Preview changes first
