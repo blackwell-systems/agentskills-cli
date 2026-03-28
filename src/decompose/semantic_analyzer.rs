@@ -2,8 +2,8 @@ use crate::error::Error;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::path::PathBuf;
 use std::fmt;
+use std::path::PathBuf;
 
 /// Why a provider detection attempt failed
 #[derive(Debug, Clone)]
@@ -151,13 +151,12 @@ impl Provider {
         match self {
             // API providers: check env var
             Provider::AnthropicApi | Provider::OpenAiApi | Provider::GeminiApi => {
-                let env_var_name = self.env_var().ok_or_else(|| {
-                    DetectionFailure::EnvVarMissing("unknown".to_string())
-                })?;
+                let env_var_name = self
+                    .env_var()
+                    .ok_or_else(|| DetectionFailure::EnvVarMissing("unknown".to_string()))?;
 
-                let api_key = env::var(env_var_name).map_err(|_| {
-                    DetectionFailure::EnvVarMissing(env_var_name.to_string())
-                })?;
+                let api_key = env::var(env_var_name)
+                    .map_err(|_| DetectionFailure::EnvVarMissing(env_var_name.to_string()))?;
 
                 if api_key.trim().is_empty() {
                     return Err(DetectionFailure::EnvVarEmpty(env_var_name.to_string()));
@@ -167,13 +166,12 @@ impl Provider {
             }
             // CLI providers: check binary on PATH
             Provider::AnthropicCli | Provider::GeminiCli | Provider::CopilotCli => {
-                let cli_name = self.cli_name().ok_or_else(|| {
-                    DetectionFailure::BinaryNotFound("unknown".to_string())
-                })?;
+                let cli_name = self
+                    .cli_name()
+                    .ok_or_else(|| DetectionFailure::BinaryNotFound("unknown".to_string()))?;
 
-                let cli_path = which::which(cli_name).map_err(|_| {
-                    DetectionFailure::BinaryNotFound(cli_name.to_string())
-                })?;
+                let cli_path = which::which(cli_name)
+                    .map_err(|_| DetectionFailure::BinaryNotFound(cli_name.to_string()))?;
 
                 Ok(self.create_cli_client(cli_path))
             }
@@ -186,12 +184,8 @@ impl Provider {
             Provider::AnthropicApi => {
                 Box::new(crate::decompose::anthropic_api::AnthropicApi::new(api_key))
             }
-            Provider::OpenAiApi => {
-                Box::new(crate::decompose::openai_api::OpenAiApi::new(api_key))
-            }
-            Provider::GeminiApi => {
-                Box::new(crate::decompose::gemini_api::GeminiApi::new(api_key))
-            }
+            Provider::OpenAiApi => Box::new(crate::decompose::openai_api::OpenAiApi::new(api_key)),
+            Provider::GeminiApi => Box::new(crate::decompose::gemini_api::GeminiApi::new(api_key)),
             _ => unreachable!("create_api_client called on CLI provider"),
         }
     }
@@ -202,9 +196,7 @@ impl Provider {
             Provider::AnthropicCli => {
                 Box::new(crate::decompose::anthropic_cli::AnthropicCli::new(cli_path))
             }
-            Provider::GeminiCli => {
-                Box::new(crate::decompose::gemini_cli::GeminiCli::new(cli_path))
-            }
+            Provider::GeminiCli => Box::new(crate::decompose::gemini_cli::GeminiCli::new(cli_path)),
             Provider::CopilotCli => {
                 Box::new(crate::decompose::copilot_cli::CopilotCli::new(cli_path))
             }
@@ -244,7 +236,7 @@ pub fn new_analyzer() -> DetectionResult {
                     analyzer: Some(analyzer),
                     attempts: vec![], // Success case - no failures to report
                     provider_name: Some(provider.name().to_string()),
-                }
+                };
             }
             Err(failure) => {
                 attempts.push((provider.name().to_string(), failure));
@@ -264,9 +256,19 @@ pub fn new_analyzer() -> DetectionResult {
 /// - "gemini-api" → GeminiApi (requires GOOGLE_API_KEY)
 /// - "gemini-cli" → GeminiCli (requires `gemini` binary)
 /// - "copilot-cli" → CopilotCli (requires `copilot` binary)
+/// - "none" → Mechanical splitting (no semantic analysis)
 ///
 /// Returns DetectionResult with either an analyzer or the failure reason.
 pub fn new_analyzer_by_name(provider_name: &str) -> DetectionResult {
+    // Special case: "none" = mechanical splitting (no semantic analysis)
+    if provider_name.to_lowercase() == "none" {
+        return DetectionResult {
+            analyzer: None,
+            attempts: vec![],
+            provider_name: Some("none (mechanical splitting)".to_string()),
+        };
+    }
+
     let provider = match provider_name.to_lowercase().as_str() {
         "anthropic-api" => Provider::AnthropicApi,
         "claude-cli" => Provider::AnthropicCli,
@@ -280,7 +282,7 @@ pub fn new_analyzer_by_name(provider_name: &str) -> DetectionResult {
                 attempts: vec![(
                     provider_name.to_string(),
                     DetectionFailure::BinaryNotFound(format!(
-                        "Unknown provider '{}'. Valid: anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli",
+                        "Unknown provider '{}'. Valid: anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli, none",
                         provider_name
                     )),
                 )],
