@@ -1,6 +1,6 @@
-use agentskills::error::Error;
-use agentskills::models::{RoutingStyle, DecomposeOptions};
 use agentskills::decompose::decompose_skill;
+use agentskills::error::Error;
+use agentskills::models::{DecomposeOptions, RoutingStyle};
 use std::fs;
 use std::io::Write;
 use tempfile::TempDir;
@@ -94,7 +94,7 @@ Line 30
     let options = DecomposeOptions {
         dry_run: false,
         interactive: None,
-        provider: None,
+        provider: Some("none".to_string()),
         routing_style: Some(RoutingStyle::Table),
         show_timing: false,
         back_links: true,
@@ -168,7 +168,7 @@ Line 30
     let options = DecomposeOptions {
         dry_run: false,
         interactive: None,
-        provider: None,
+        provider: Some("none".to_string()),
         routing_style: Some(RoutingStyle::Inline),
         show_timing: false,
         back_links: true,
@@ -241,7 +241,7 @@ Line 30
     let options = DecomposeOptions {
         dry_run: false,
         interactive: None,
-        provider: None,
+        provider: Some("none".to_string()),
         routing_style: Some(RoutingStyle::Inline),
         show_timing: false,
         back_links: false,
@@ -312,7 +312,7 @@ Line 30
     let options = DecomposeOptions {
         dry_run: false,
         interactive: None,
-        provider: None,
+        provider: Some("none".to_string()),
         routing_style: None,
         show_timing: false,
         back_links: true,
