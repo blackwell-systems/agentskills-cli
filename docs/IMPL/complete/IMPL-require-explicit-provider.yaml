@@ -1,0 +1,601 @@
+completion_date: "2026-03-28"
+title: Require Explicit Provider Selection for Semantic Analysis
+feature_slug: require-explicit-provider
+verdict: SUITABLE
+suitability_assessment: |
+    This refactoring is suitable for Scout-and-Wave parallel execution.
+
+    **Suitability gate results:**
+
+    1. **File decomposition:** ✓ PASS
+       - 6 files require modification (4 source files, 2 test files)
+       - Disjoint file ownership is achievable: src/decompose/mod.rs (cascade logic removal),
+         src/decompose/semantic_analyzer.rs (add "none" provider), src/commands/decompose.rs
+         (help text update), src/models.rs (if needed for error types), tests/*.rs (add --provider flag)
+       - No conflicting modifications - each file has distinct change scope
+
+    2. **Investigation-first items:** ✓ PASS
+       - No root cause analysis required
+       - Behavior is well-understood: cascade auto-detection creates non-determinism
+       - Target behavior is clearly specified in feature description
+
+    3. **Interface discoverability:** ✓ PASS
+       - Cross-agent interfaces are minimal and already defined:
+         - `new_analyzer()` → `new_analyzer_by_name()` (existing public functions)
+         - `DetectionResult` struct (already exists, no changes needed)
+         - `DecomposeOptions.provider` field (already exists as `Option<String>`)
+       - Error message format is the only new cross-agent contract (simple string)
+
+    4. **Pre-implementation status check:**
+       - N/A for refactorings (no audit report or bug list)
+       - Codebase review confirms cascade logic exists at lines 60-63 in src/decompose/mod.rs
+       - Help text at line 43 in src/commands/decompose.rs mentions "(auto-detects if omitted)"
+       - Tests at tests/routing_integration_test.rs use `provider: None` (4 occurrences)
+
+    5. **Parallelization value check:** ✓ SUITABLE WITH CAVEATS
+       - Build/test cycle: ~25s (cargo test), benefits from parallelization
+       - Files per agent: 2-3 files per agent (good distribution)
+       - Agent independence: High - all agents can work in Wave 1 simultaneously
+       - Task complexity: Low-to-medium (mostly removing code + updating help text + adding tests)
+       - **Coordination value independent of speed:** Even though raw implementation time
+         is modest (~15-20 minutes sequentially), the IMPL doc provides value as an audit
+         trail for this API-breaking change and ensures test coverage is comprehensive.
+
+    **Estimated times:**
+    - Scout phase: ~8 min (dependency mapping, interface contracts, IMPL doc)
+    - Agent execution: ~8 min (4 agents × 5 min avg, parallelized to ~8 min)
+    - Merge & verification: ~3 min (cargo test runs full suite)
+    - Total SAW time: ~19 min
+
+    Sequential baseline: ~20 min (4 agents × 5 min avg sequential time)
+    Time savings: ~1 min (5% faster)
+
+    **Recommendation:** Marginal time gains, but coordination value justifies SAW approach.
+    This is an API-breaking change that requires comprehensive test coverage and careful
+    documentation of behavioral changes. The IMPL doc structure ensures all test cases
+    are identified upfront and no edge cases are missed.
+test_command: cargo test
+lint_command: cargo clippy -- -D warnings
+file_ownership:
+    - file: src/decompose/mod.rs
+      agent: A
+      wave: 1
+      action: modify
+    - file: src/decompose/semantic_analyzer.rs
+      agent: B
+      wave: 1
+      action: modify
+    - file: src/commands/decompose.rs
+      agent: C
+      wave: 1
+      action: modify
+    - file: tests/integration_test.rs
+      agent: D
+      wave: 1
+      action: modify
+    - file: tests/routing_integration_test.rs
+      agent: D
+      wave: 1
+      action: modify
+    - file: README.md
+      agent: C
+      wave: 1
+      action: modify
+interface_contracts:
+    - name: new_analyzer_by_name
+      description: Existing function that creates a semantic analyzer for a specific provider by name
+      definition: |
+        pub fn new_analyzer_by_name(provider_name: &str) -> DetectionResult
+
+        Provider names: "anthropic-api", "claude-cli", "openai-api", "gemini-api",
+                        "gemini-cli", "copilot-cli", "none"
+
+        Returns DetectionResult with either an analyzer or failure reason.
+      location: src/decompose/semantic_analyzer.rs
+    - name: DetectionResult
+      description: Result structure returned by provider detection functions (no changes needed)
+      definition: |
+        pub struct DetectionResult {
+            pub analyzer: Option<Box<dyn SemanticAnalyzer>>,
+            pub attempts: Vec<(String, DetectionFailure)>,
+            pub provider_name: Option<String>,
+        }
+
+        impl DetectionResult {
+            pub fn error_message(&self) -> String { ... }
+        }
+      location: src/decompose/semantic_analyzer.rs
+    - name: Error messages
+      description: User-facing error messages when no provider is specified
+      definition: |
+        When options.provider is None:
+        - Print helpful error to stderr listing all available providers
+        - Error format: "Error: --provider flag is required for semantic analysis.\n\n
+                         Available providers:\n  - anthropic-api (requires ANTHROPIC_API_KEY)\n
+                         ...\n\nOr use '--provider none' for mechanical splitting."
+        - Return Error::ValidationError with same message
+      location: src/decompose/mod.rs (error emission), src/commands/decompose.rs (help text)
+waves:
+    - number: 1
+      agents:
+        - id: A
+          task: |
+            ## Agent A: Remove Cascade Auto-Detection from decompose_skill
+
+            **What to implement:**
+            Remove the cascade auto-detection fallback in `src/decompose/mod.rs` (lines 60-63)
+            and replace with an error when no provider is specified.
+
+            **Current behavior (lines 49-63):**
+            ```rust
+            let detection = if let Some(ref provider_name) = options.provider {
+                // User specified a provider explicitly
+                let result = semantic_analyzer::new_analyzer_by_name(provider_name);
+                if result.analyzer.is_none() {
+                    eprintln!("{}", result.error_message());
+                    return Err(Error::ValidationError(format!(
+                        "Failed to initialize provider '{}'",
+                        provider_name
+                    )));
+                }
+                result
+            } else {
+                // Auto-detect using cascade
+                semantic_analyzer::new_analyzer()
+            };
+            ```
+
+            **Target behavior:**
+            ```rust
+            let detection = if let Some(ref provider_name) = options.provider {
+                // User specified a provider explicitly (including "none")
+                let result = semantic_analyzer::new_analyzer_by_name(provider_name);
+                if result.analyzer.is_none() && provider_name != "none" {
+                    eprintln!("{}", result.error_message());
+                    return Err(Error::ValidationError(format!(
+                        "Failed to initialize provider '{}'",
+                        provider_name
+                    )));
+                }
+                result
+            } else {
+                // No provider specified - require explicit selection
+                eprintln!("Error: --provider flag is required for semantic analysis.\n");
+                eprintln!("Available providers:");
+                eprintln!("  - anthropic-api (requires ANTHROPIC_API_KEY)");
+                eprintln!("  - claude-cli (requires 'claude' binary on PATH)");
+                eprintln!("  - openai-api (requires OPENAI_API_KEY)");
+                eprintln!("  - gemini-api (requires GOOGLE_API_KEY)");
+                eprintln!("  - gemini-cli (requires 'gemini' binary on PATH)");
+                eprintln!("  - copilot-cli (requires 'copilot' binary on PATH)");
+                eprintln!("  - none (mechanical splitting without semantic analysis)\n");
+                return Err(Error::ValidationError(
+                    "--provider flag is required".to_string()
+                ));
+            };
+            ```
+
+            **Key changes:**
+            1. Remove the `else { semantic_analyzer::new_analyzer() }` branch entirely
+            2. Add error branch that prints provider list and returns ValidationError
+            3. Update the provider_name validation to allow "none" without error
+            4. Keep the existing "Using <provider>" status message (lines 66-71)
+
+            **Unit tests to update (E37 correction):**
+            The module contains 6 unit tests (lines 271-447) that use `provider: None` in
+            `DecomposeOptions`. After removing cascade auto-detection, these tests will fail.
+            Update all 6 tests to use `provider: Some("none".to_string())` instead:
+            - `test_decompose_skill_dry_run_does_not_write` (line 272)
+            - `test_decompose_skill_dry_run_returns_preview` (line 302)
+            - `test_decompose_skill_creates_directory_structure` (line 324)
+            - `test_decompose_skill_writes_reference_files` (line 361)
+            - `test_decompose_skill_sets_script_executable` (line 400)
+            - `test_decompose_skill_validates_path` (line 435)
+
+            **Verification gate:**
+            ```bash
+            cargo build
+            cargo fmt --check || cargo fmt
+            cargo clippy -- -D warnings
+            cargo test --test integration_test -- --test-threads=1
+            ```
+
+            **Constraints:**
+            - Do NOT modify `semantic_analyzer::new_analyzer()` or `new_analyzer_by_name()` functions
+            - Do NOT change `DetectionResult` struct
+            - Keep existing provider status messages (lines 66-71) unchanged
+            - Preserve the error handling for failed explicit provider initialization
+          files:
+            - src/decompose/mod.rs
+        - id: B
+          task: |
+            ## Agent B: Add "none" Provider Support to Semantic Analyzer
+
+            **What to implement:**
+            Add "none" as a valid provider name to `new_analyzer_by_name()` in
+            `src/decompose/semantic_analyzer.rs`. When "none" is specified, return a
+            DetectionResult with no analyzer (mechanical splitting mode).
+
+            **Current behavior (lines 269-290):**
+            ```rust
+            pub fn new_analyzer_by_name(provider_name: &str) -> DetectionResult {
+                let provider = match provider_name.to_lowercase().as_str() {
+                    "anthropic-api" => Provider::AnthropicApi,
+                    "claude-cli" => Provider::AnthropicCli,
+                    "openai-api" => Provider::OpenAiApi,
+                    "gemini-api" => Provider::GeminiApi,
+                    "gemini-cli" => Provider::GeminiCli,
+                    "copilot-cli" => Provider::CopilotCli,
+                    _ => {
+                        return DetectionResult {
+                            analyzer: None,
+                            attempts: vec![(
+                                provider_name.to_string(),
+                                DetectionFailure::BinaryNotFound(format!(
+                                    "Unknown provider '{}'. Valid: anthropic-api, ...",
+                                    provider_name
+                                )),
+                            )],
+                            provider_name: None,
+                        };
+                    }
+                };
+                // ...
+            }
+            ```
+
+            **Target behavior:**
+            ```rust
+            pub fn new_analyzer_by_name(provider_name: &str) -> DetectionResult {
+                // Special case: "none" = mechanical splitting (no semantic analysis)
+                if provider_name.to_lowercase() == "none" {
+                    return DetectionResult {
+                        analyzer: None,
+                        attempts: vec![],
+                        provider_name: Some("none (mechanical splitting)".to_string()),
+                    };
+                }
+
+                let provider = match provider_name.to_lowercase().as_str() {
+                    "anthropic-api" => Provider::AnthropicApi,
+                    "claude-cli" => Provider::AnthropicCli,
+                    "openai-api" => Provider::OpenAiApi,
+                    "gemini-api" => Provider::GeminiApi,
+                    "gemini-cli" => Provider::GeminiCli,
+                    "copilot-cli" => Provider::CopilotCli,
+                    _ => {
+                        return DetectionResult {
+                            analyzer: None,
+                            attempts: vec![(
+                                provider_name.to_string(),
+                                DetectionFailure::BinaryNotFound(format!(
+                                    "Unknown provider '{}'. Valid: anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli, none",
+                                    provider_name
+                                )),
+                            )],
+                            provider_name: None,
+                        };
+                    }
+                };
+                // ... rest unchanged
+            }
+            ```
+
+            **Key changes:**
+            1. Add early return at top of function for `provider_name == "none"`
+            2. Return DetectionResult with `analyzer: None` and `provider_name: Some("none ...")`
+            3. Update error message in the wildcard match to include "none" in valid list
+
+            **Verification gate:**
+            ```bash
+            cargo build
+            cargo fmt --check || cargo fmt
+            cargo clippy -- -D warnings
+            cargo test -p agentskills --lib decompose::semantic_analyzer::tests
+            ```
+
+            **Constraints:**
+            - Do NOT modify the Provider enum (no new variant needed for "none")
+            - Do NOT change `new_analyzer()` function
+            - Do NOT modify `DetectionResult` struct definition
+            - Keep all existing tests passing
+          files:
+            - src/decompose/semantic_analyzer.rs
+        - id: C
+          task: |
+            ## Agent C: Update Help Text and Documentation
+
+            **What to implement:**
+            Update the help text and documentation to reflect that `--provider` is now
+            required (not auto-detected).
+
+            **Files to modify:**
+            1. `src/commands/decompose.rs` (line 43)
+            2. `README.md` (lines 130, 220-241)
+
+            **Change 1: src/commands/decompose.rs line 43**
+
+            Current:
+            ```rust
+            /// AI provider (auto-detects if omitted): anthropic-api, claude-cli, ...
+            #[arg(long, value_name = "PROVIDER")]
+            pub provider: Option<String>,
+            ```
+
+            Target:
+            ```rust
+            /// AI provider (required): anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli, none
+            #[arg(long, value_name = "PROVIDER")]
+            pub provider: Option<String>,
+            ```
+
+            **Change 2: README.md line 130**
+
+            Current:
+            ```markdown
+            # With semantic analysis (requires ANTHROPIC_API_KEY or claude CLI)
+            agentskills decompose ~/.claude/skills/my-skill
+            ```
+
+            Target:
+            ```markdown
+            # With semantic analysis (requires --provider flag)
+            agentskills decompose ~/.claude/skills/my-skill --provider anthropic-api
+
+            # Mechanical splitting without semantic analysis
+            agentskills decompose ~/.claude/skills/my-skill --provider none
+            ```
+
+            **Change 3: README.md lines 220-241 (Semantic Analysis Authentication section)**
+
+            Current (lines 220-232):
+            ```markdown
+            ### Semantic Analysis Authentication
+
+            The `decompose` command's semantic analysis supports multiple AgentSkills-compliant providers (checked in order):
+
+            1. **Anthropic API** - Set `ANTHROPIC_API_KEY` environment variable
+            2. **Claude CLI** - Have `claude` command available on PATH (Max plan users)
+            3. **OpenAI API** - Set `OPENAI_API_KEY` environment variable
+            4. **Gemini API** - Set `GOOGLE_API_KEY` environment variable
+            5. **Gemini CLI** - Have `gemini` command available on PATH
+            6. **GitHub Copilot CLI** - Have `copilot` command available on PATH (Copilot subscription)
+
+            Without any provider, the tool falls back to mechanical splitting (section headers only).
+            ```
+
+            Target:
+            ```markdown
+            ### Semantic Analysis Providers
+
+            The `decompose` command requires explicit `--provider` selection for semantic analysis:
+
+            **Available providers:**
+            - **anthropic-api** - Requires `ANTHROPIC_API_KEY` environment variable
+            - **claude-cli** - Requires `claude` command on PATH (Max plan users)
+            - **openai-api** - Requires `OPENAI_API_KEY` environment variable
+            - **gemini-api** - Requires `GOOGLE_API_KEY` environment variable
+            - **gemini-cli** - Requires `gemini` command on PATH
+            - **copilot-cli** - Requires `copilot` command on PATH (Copilot subscription)
+            - **none** - Mechanical splitting without semantic analysis (section headers only)
+            ```
+
+            Keep lines 234-241 (example commands) unchanged.
+
+            **Verification gate:**
+            ```bash
+            cargo build
+            cargo fmt --check || cargo fmt
+            cargo clippy -- -D warnings
+            # Verify help text renders correctly
+            cargo run -- decompose --help | grep -q "AI provider (required)"
+            ```
+
+            **Constraints:**
+            - Do NOT modify the `DecomposeCommand` struct fields (only the doc comment)
+            - Do NOT change any code logic in run() or run_async() functions
+            - Keep all existing command-line examples in the after_help section
+          files:
+            - src/commands/decompose.rs
+            - README.md
+        - id: D
+          task: |
+            ## Agent D: Update Integration Tests
+
+            **What to implement:**
+            Update all integration tests to include explicit `--provider none` flag when
+            calling `agentskills decompose`. Tests currently use `provider: None` in
+            `DecomposeOptions` (unit tests) or omit the flag (CLI tests), both of which
+            will fail after the refactoring.
+
+            **Files to modify:**
+            1. `tests/integration_test.rs` (lines 112, 129)
+            2. `tests/routing_integration_test.rs` (all `DecomposeOptions` instances)
+
+            **Change 1: tests/integration_test.rs**
+
+            Current (line 112):
+            ```rust
+            let mut cmd = Command::cargo_bin("agentskills").unwrap();
+            cmd.arg("decompose").arg(&skill_path).arg("--dry-run");
+            ```
+
+            Target:
+            ```rust
+            let mut cmd = Command::cargo_bin("agentskills").unwrap();
+            cmd.arg("decompose").arg(&skill_path).arg("--dry-run").arg("--provider").arg("none");
+            ```
+
+            Current (line 129):
+            ```rust
+            let mut cmd = Command::cargo_bin("agentskills").unwrap();
+            cmd.arg("decompose").arg(&skill_path);
+            ```
+
+            Target:
+            ```rust
+            let mut cmd = Command::cargo_bin("agentskills").unwrap();
+            cmd.arg("decompose").arg(&skill_path).arg("--provider").arg("none");
+            ```
+
+            **Change 2: tests/routing_integration_test.rs**
+
+            Search for all `DecomposeOptions` struct initializations with `provider: None`
+            and change to `provider: Some("none".to_string())`.
+
+            Current pattern (appears 4 times):
+            ```rust
+            let options = DecomposeOptions {
+                dry_run: true,
+                interactive: Some(false),
+                provider: None,
+                routing_style: Some(RoutingStyle::Inline),
+                show_timing: false,
+                back_links: true,
+            };
+            ```
+
+            Target pattern:
+            ```rust
+            let options = DecomposeOptions {
+                dry_run: true,
+                interactive: Some(false),
+                provider: Some("none".to_string()),
+                routing_style: Some(RoutingStyle::Inline),
+                show_timing: false,
+                back_links: true,
+            };
+            ```
+
+            **New test case: test_decompose_without_provider_flag_fails**
+
+            Add a new test to `tests/integration_test.rs` that verifies the error message:
+
+            ```rust
+            #[test]
+            fn test_decompose_without_provider_flag_fails() {
+                let temp_dir = TempDir::new().unwrap();
+                let skill_path = create_bloated_skill(&temp_dir);
+
+                let mut cmd = Command::cargo_bin("agentskills").unwrap();
+                cmd.arg("decompose").arg(&skill_path);
+
+                cmd.assert()
+                    .failure()
+                    .stderr(predicate::str::contains("--provider flag is required"))
+                    .stderr(predicate::str::contains("Available providers:"));
+            }
+            ```
+
+            **Verification gate:**
+            ```bash
+            cargo build
+            cargo fmt --check || cargo fmt
+            cargo clippy -- -D warnings
+            cargo test --test integration_test -- --test-threads=1
+            cargo test --test routing_integration_test -- --test-threads=1
+            ```
+
+            **Constraints:**
+            - Do NOT modify the test fixture functions (create_valid_skill, create_bloated_skill, etc.)
+            - Do NOT change any assertion logic (only add --provider flags)
+            - Ensure all existing tests continue to pass with the --provider flag added
+            - Add exactly one new test case for the error condition
+          files:
+            - tests/integration_test.rs
+            - tests/routing_integration_test.rs
+      base_commit: 47020ad5d305dd05e04f2dac48b64c453d8fefc6
+quality_gates:
+    level: standard
+    gates:
+        - type: build
+          command: cargo build
+          required: true
+        - type: format
+          command: cargo fmt --check
+          required: false
+          fix: true
+        - type: lint
+          command: cargo clippy -- -D warnings
+          required: true
+        - type: test
+          command: cargo test
+          required: true
+completion_reports:
+    A:
+        status: complete
+        branch: saw/require-explicit-provider/wave1-agent-A
+        commit: 0085c9d
+        files_changed:
+            - src/decompose/mod.rs
+        tests_added:
+            - None (updated existing 6 unit tests)
+        verification: FAIL (integration tests need --provider flag)
+        notes: 'Core implementation complete. Removed cascade auto-detection (lines 60-63), replaced with explicit error listing all providers. Updated provider validation to allow ''none'' without error. All 6 unit tests in mod.rs now pass with provider: Some(''none''). OUT-OF-SCOPE: Integration tests (tests/integration_test.rs) fail because they don''t pass --provider flag - this file is outside Agent A''s ownership and must be fixed by another agent or wave.'
+    B:
+        status: complete
+        branch: saw/require-explicit-provider/wave1-agent-B
+        commit: 60c15e8
+        files_changed:
+            - src/decompose/semantic_analyzer.rs
+        verification: PASS
+        notes: Added 'none' provider support to new_analyzer_by_name(). When 'none' is specified, returns DetectionResult with no analyzer for mechanical splitting mode. Updated docstring and error message to include 'none' in valid providers list. All tests pass, build clean, clippy clean.
+    C:
+        status: complete
+        branch: saw/require-explicit-provider/wave1-agent-C
+        commit: 599a597
+        files_changed:
+            - src/commands/decompose.rs
+            - README.md
+        verification: PASS
+        notes: All documentation changes complete. Updated help text to show --provider as required (not auto-detected), added 'none' option to provider list, updated README examples to demonstrate --provider flag usage, and restructured semantic analysis section from auto-detection flow to explicit provider selection.
+    D:
+        status: complete
+        branch: saw/require-explicit-provider/wave1-agent-D
+        commit: d47e00851c5a8b10de04ee2803e52c4869120b20
+        files_changed:
+            - tests/integration_test.rs
+            - tests/routing_integration_test.rs
+        tests_added:
+            - test_decompose_without_provider_flag_fails
+        verification: PASS (build/lint/fmt clean; test failures expected until Agents A+C merge)
+        notes: 'All test updates implemented per spec. Added --provider none flags to 2 CLI tests, updated 4 DecomposeOptions structs to use provider: Some("none".to_string()), and added new test case for missing provider error. Tests currently fail because: (1) Agent A''s ''none'' provider not yet implemented, (2) Agent C''s required provider validation not yet implemented. Tests will pass after Wave 1 merge.'
+pre_mortem:
+    overall_risk: low
+    rows:
+        - scenario: Agent A removes cascade logic but Agent B doesn't implement "none" provider support
+          likelihood: low
+          impact: high
+          mitigation: Interface contract explicitly specifies "none" handling in new_analyzer_by_name(). Both agents reference the same contract. Agent B's verification gate tests the "none" provider explicitly.
+        - scenario: Help text updates (Agent C) land before logic changes (Agent A), confusing users
+          likelihood: low
+          impact: low
+          mitigation: Documentation and logic are in Wave 1 - all changes land simultaneously. Post-merge verification runs full test suite to catch any mismatch.
+        - scenario: Tests (Agent D) don't cover all provider error paths
+          likelihood: medium
+          impact: medium
+          mitigation: Agent D's task explicitly requires adding a test for the "no provider specified" error case. Verification gate runs full test suite to ensure coverage.
+        - scenario: Existing unit tests in src/decompose/mod.rs fail after cascade removal
+          likelihood: high
+          impact: medium
+          mitigation: Agent A's verification gate runs `cargo test` which includes mod.rs unit tests. If tests expect cascade behavior, Agent A must update them to use explicit provider.
+critic_report:
+    verdict: PASS
+    agent_reviews:
+        A:
+            agent_id: A
+            verdict: PASS
+        B:
+            agent_id: B
+            verdict: PASS
+        C:
+            agent_id: C
+            verdict: PASS
+        D:
+            agent_id: D
+            verdict: PASS
+    summary: All agent briefs have been verified against the codebase. The previous critic review identified that 6 unit tests in src/decompose/mod.rs were not covered by any agent; this has been corrected by adding explicit instructions to Agent A (lines 183-193) to update all 6 tests. All file existence checks pass, symbol accuracy is verified, interface contracts are consistent, and pattern accuracy is confirmed. No complexity balance or caller exhaustiveness issues remain.
+    reviewed_at: "2026-03-28T12:15:18Z"
+    issue_count: 0
+state: COMPLETE
+injection_method: hook
