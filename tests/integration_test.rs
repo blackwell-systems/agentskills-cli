@@ -109,12 +109,18 @@ fn test_decompose_dry_run_no_files_written() {
     let skill_path = create_bloated_skill(&temp_dir);
 
     let mut cmd = Command::cargo_bin("agentskills").unwrap();
-    cmd.arg("decompose").arg(&skill_path).arg("--dry-run");
+    cmd.arg("decompose")
+        .arg(&skill_path)
+        .arg("--dry-run")
+        .arg("--provider")
+        .arg("none");
 
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("Decompose Analysis (Dry Run)"))
-        .stdout(predicate::str::contains("To apply changes, run without --dry-run flag"));
+        .stdout(predicate::str::contains(
+            "To apply changes, run without --dry-run flag",
+        ));
 
     // Verify no files were created in dry-run mode
     assert!(!temp_dir.path().join("references").exists());
@@ -127,7 +133,10 @@ fn test_decompose_creates_directory_structure() {
     let skill_path = create_bloated_skill(&temp_dir);
 
     let mut cmd = Command::cargo_bin("agentskills").unwrap();
-    cmd.arg("decompose").arg(&skill_path);
+    cmd.arg("decompose")
+        .arg(&skill_path)
+        .arg("--provider")
+        .arg("none");
 
     cmd.assert()
         .success()
@@ -168,4 +177,18 @@ fn test_lint_nonexistent_path() {
     cmd.arg("lint").arg("/nonexistent/path/SKILL.md");
 
     cmd.assert().failure();
+}
+
+#[test]
+fn test_decompose_without_provider_flag_fails() {
+    let temp_dir = TempDir::new().unwrap();
+    let skill_path = create_bloated_skill(&temp_dir);
+
+    let mut cmd = Command::cargo_bin("agentskills").unwrap();
+    cmd.arg("decompose").arg(&skill_path);
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("--provider flag is required"))
+        .stderr(predicate::str::contains("Available providers:"));
 }
