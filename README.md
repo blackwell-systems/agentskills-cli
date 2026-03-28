@@ -127,8 +127,11 @@ agentskills decompose ~/.claude/skills/my-skill --dry-run
 # Interactive mode - confirm before applying
 agentskills decompose ~/.claude/skills/my-skill --interactive
 
-# With semantic analysis (requires ANTHROPIC_API_KEY or claude CLI)
-agentskills decompose ~/.claude/skills/my-skill
+# With semantic analysis (requires --provider flag)
+agentskills decompose ~/.claude/skills/my-skill --provider anthropic-api
+
+# Mechanical splitting without semantic analysis
+agentskills decompose ~/.claude/skills/my-skill --provider none
 ```
 
 **Before decomposition:**
@@ -217,20 +220,20 @@ Read `${SKILL_DIR}/references/diagnose-failures.md` and follow its instructions.
 
 This is **control flow externalization** - implicit runtime branches become explicit, tool-callable instructions.
 
-### Semantic Analysis Authentication
+### Semantic Analysis Providers
 
-The `decompose` command's semantic analysis supports multiple AgentSkills-compliant providers (checked in order):
+The `decompose` command requires explicit `--provider` selection for semantic analysis:
 
-1. **Anthropic API** - Set `ANTHROPIC_API_KEY` environment variable
-2. **Claude CLI** - Have `claude` command available on PATH (Max plan users)
-3. **OpenAI API** - Set `OPENAI_API_KEY` environment variable
-4. **Gemini API** - Set `GOOGLE_API_KEY` environment variable
-5. **Gemini CLI** - Have `gemini` command available on PATH
-6. **GitHub Copilot CLI** - Have `copilot` command available on PATH (Copilot subscription)
+**Available providers:**
+- **anthropic-api** - Requires `ANTHROPIC_API_KEY` environment variable
+- **claude-cli** - Requires `claude` command on PATH (Max plan users)
+- **openai-api** - Requires `OPENAI_API_KEY` environment variable
+- **gemini-api** - Requires `GOOGLE_API_KEY` environment variable
+- **gemini-cli** - Requires `gemini` command on PATH
+- **copilot-cli** - Requires `copilot` command on PATH (Copilot subscription)
+- **none** - Mechanical splitting without semantic analysis (section headers only)
 
-Without any provider, the tool falls back to mechanical splitting (section headers only).
-
-**Override provider selection:**
+**Example usage:**
 ```bash
 # Force a specific provider instead of auto-detection
 agentskills decompose <skill-path> --provider openai-api

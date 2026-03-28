@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::models::{RoutingStyle, DecomposeOptions};
+use crate::models::{DecomposeOptions, RoutingStyle};
 use clap::Parser;
 use colored::Colorize;
 use std::path::PathBuf;
@@ -40,7 +40,7 @@ pub struct DecomposeCommand {
     #[arg(long)]
     pub interactive: bool,
 
-    /// AI provider (auto-detects if omitted): anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli
+    /// AI provider (required): anthropic-api, claude-cli, openai-api, gemini-api, gemini-cli, copilot-cli, none
     #[arg(long, value_name = "PROVIDER")]
     pub provider: Option<String>,
 
@@ -62,9 +62,8 @@ pub struct DecomposeCommand {
 /// Once main.rs is updated to use an async runtime (e.g., #[tokio::main]),
 /// it can call run_async directly.
 pub fn run(cmd: &DecomposeCommand) -> Result<(), Error> {
-    let rt = Runtime::new().map_err(|e| {
-        Error::ValidationError(format!("Failed to create async runtime: {}", e))
-    })?;
+    let rt = Runtime::new()
+        .map_err(|e| Error::ValidationError(format!("Failed to create async runtime: {}", e)))?;
     rt.block_on(run_async(cmd))
 }
 
@@ -101,7 +100,10 @@ pub async fn run_async(cmd: &DecomposeCommand) -> Result<(), Error> {
         // would be implemented here after Agent E's decompose_skill returns structured data.
         // For now, we show a basic prompt.
         eprintln!("\n{}", "--- Preview Mode ---".bold());
-        eprintln!("Analysis complete. Changes will be applied to: {:?}", cmd.path);
+        eprintln!(
+            "Analysis complete. Changes will be applied to: {:?}",
+            cmd.path
+        );
         eprintln!("\n{}", "Apply these changes? [y/N]: ".bold());
 
         use std::io::{self, BufRead};
@@ -160,8 +162,8 @@ mod tests {
 
     #[test]
     fn test_decompose_command_with_dry_run() {
-        let cmd =
-            DecomposeCommand::try_parse_from(&["decompose", "/path/to/skill", "--dry-run"]).unwrap();
+        let cmd = DecomposeCommand::try_parse_from(&["decompose", "/path/to/skill", "--dry-run"])
+            .unwrap();
         assert_eq!(cmd.path, PathBuf::from("/path/to/skill"));
         assert!(cmd.dry_run);
         assert!(!cmd.interactive);
@@ -197,12 +199,9 @@ mod tests {
 
     #[test]
     fn test_decompose_command_with_interactive() {
-        let cmd = DecomposeCommand::try_parse_from(&[
-            "decompose",
-            "/path/to/skill",
-            "--interactive",
-        ])
-        .unwrap();
+        let cmd =
+            DecomposeCommand::try_parse_from(&["decompose", "/path/to/skill", "--interactive"])
+                .unwrap();
         assert_eq!(cmd.path, PathBuf::from("/path/to/skill"));
         assert!(!cmd.dry_run);
         assert!(cmd.interactive);
