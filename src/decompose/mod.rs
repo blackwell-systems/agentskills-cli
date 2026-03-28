@@ -1,39 +1,42 @@
 use crate::error::Error;
 use crate::models::{
-    PreviewData, SectionPreview, ReferenceFilePreview, BreadcrumbPreview,
-    SectionTiming, DecomposeOptions
+    BreadcrumbPreview, DecomposeOptions, PreviewData, ReferenceFilePreview, SectionPreview,
+    SectionTiming,
 };
 use colored::Colorize;
 use std::fs;
 use std::path::Path;
 
 pub mod analyzer;
-pub mod generator;
-pub mod splitter;
-pub mod pattern_detector;
-pub mod semantic_analyzer;
 pub mod anthropic_api;
 pub mod anthropic_cli;
-pub mod openai_api;
+pub mod copilot_cli;
+pub mod frontmatter_gen;
 pub mod gemini_api;
 pub mod gemini_cli;
-pub mod copilot_cli;
-pub mod routing_graph;
-pub mod frontmatter_gen;
+pub mod generator;
+pub mod interactive_recommender;
+pub mod openai_api;
+pub mod pattern_detector;
 pub mod routing_detector;
 pub mod routing_generator;
-pub mod interactive_recommender;
+pub mod routing_graph;
+pub mod semantic_analyzer;
+pub mod splitter;
 
 pub use analyzer::{analyze_bloat, BloatAnalysis, SplitSuggestion};
 pub use generator::generate_inject_script;
-pub use splitter::{split_content, SplitResult, SectionMetadata};
-pub use pattern_detector::{extract_subcommands, extract_agent_types};
+pub use interactive_recommender::show_interactive_preview;
+pub use pattern_detector::{extract_agent_types, extract_subcommands};
 pub use routing_detector::detect_routing_patterns;
 pub use routing_generator::generate_routing;
-pub use interactive_recommender::show_interactive_preview;
+pub use splitter::{split_content, SectionMetadata, SplitResult};
 
 /// Main upgrade entry point - converts Agent Skill to progressive disclosure pattern
-pub async fn decompose_skill(skill_path: &Path, options: &DecomposeOptions) -> Result<Option<PreviewData>, Error> {
+pub async fn decompose_skill(
+    skill_path: &Path,
+    options: &DecomposeOptions,
+) -> Result<Option<PreviewData>, Error> {
     // Verify SKILL.md exists
     if !skill_path.exists() {
         return Err(Error::ValidationError(format!(
@@ -47,9 +50,9 @@ pub async fn decompose_skill(skill_path: &Path, options: &DecomposeOptions) -> R
 
     // Create semantic analyzer (supports multiple providers: Anthropic, OpenAI, Gemini, Copilot)
     let detection = if let Some(ref provider_name) = options.provider {
-        // User specified a provider explicitly
+        // User specified a provider explicitly (including "none")
         let result = semantic_analyzer::new_analyzer_by_name(provider_name);
-        if result.analyzer.is_none() {
+        if result.analyzer.is_none() && provider_name != "none" {
             eprintln!("{}", result.error_message());
             return Err(Error::ValidationError(format!(
                 "Failed to initialize provider '{}'",
@@ -58,8 +61,19 @@ pub async fn decompose_skill(skill_path: &Path, options: &DecomposeOptions) -> R
         }
         result
     } else {
-        // Auto-detect using cascade
-        semantic_analyzer::new_analyzer()
+        // No provider specified - require explicit selection
+        eprintln!("Error: --provider flag is required for semantic analysis.\n");
+        eprintln!("Available providers:");
+        eprintln!("  - anthropic-api (requires ANTHROPIC_API_KEY)");
+        eprintln!("  - claude-cli (requires 'claude' binary on PATH)");
+        eprintln!("  - openai-api (requires OPENAI_API_KEY)");
+        eprintln!("  - gemini-api (requires GOOGLE_API_KEY)");
+        eprintln!("  - gemini-cli (requires 'gemini' binary on PATH)");
+        eprintln!("  - copilot-cli (requires 'copilot' binary on PATH)");
+        eprintln!("  - none (mechanical splitting without semantic analysis)\n");
+        return Err(Error::ValidationError(
+            "--provider flag is required".to_string(),
+        ));
     };
 
     // Print provider status
@@ -78,17 +92,27 @@ pub async fn decompose_skill(skill_path: &Path, options: &DecomposeOptions) -> R
         interactive_recommender::show_interactive_preview(&routing_detection, options)?
             .unwrap_or(routing_detection.recommended_style.clone())
     } else {
-        options.routing_style.clone().unwrap_or(routing_detection.recommended_style.clone())
+        options
+            .routing_style
+            .clone()
+            .unwrap_or(routing_detection.recommended_style.clone())
     };
 
     // Step 1.7: Generate routing artifacts
     let content = fs::read_to_string(skill_path)
         .map_err(|e| Error::ValidationError(format!("Failed to read SKILL.md: {}", e)))?;
     let skill_name = extract_skill_name(&content)?;
-    let routing_output = routing_generator::generate_routing(&routing_detection, routing_style, &skill_name)?;
+    let routing_output =
+        routing_generator::generate_routing(&routing_detection, routing_style, &skill_name)?;
 
     // Step 2: Split content (pass routing_output)
-    let split_result = splitter::split_content(skill_path, &analysis, detection.analyzer, Some(&routing_output)).await?;
+    let split_result = splitter::split_content(
+        skill_path,
+        &analysis,
+        detection.analyzer,
+        Some(&routing_output),
+    )
+    .await?;
 
     // Step 3: If dry-run, build preview data and return it
     if options.dry_run {
@@ -118,8 +142,9 @@ pub async fn decompose_skill(skill_path: &Path, options: &DecomposeOptions) -> R
     // Write reference files
     for (filename, content) in &split_result.reference_files {
         let ref_path = references_dir.join(filename);
-        fs::write(&ref_path, content)
-            .map_err(|e| Error::ValidationError(format!("Failed to write reference file: {}", e)))?;
+        fs::write(&ref_path, content).map_err(|e| {
+            Error::ValidationError(format!("Failed to write reference file: {}", e))
+        })?;
     }
 
     // Create scripts/ directory
@@ -130,19 +155,23 @@ pub async fn decompose_skill(skill_path: &Path, options: &DecomposeOptions) -> R
     // Write inject-context script
     if !inject_script.is_empty() {
         let inject_path = scripts_dir.join("inject-context");
-        fs::write(&inject_path, inject_script)
-            .map_err(|e| Error::ValidationError(format!("Failed to write inject-context script: {}", e)))?;
+        fs::write(&inject_path, inject_script).map_err(|e| {
+            Error::ValidationError(format!("Failed to write inject-context script: {}", e))
+        })?;
 
         // Set executable permissions (Unix only, no-op on Windows)
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let mut perms = fs::metadata(&inject_path)
-                .map_err(|e| Error::ValidationError(format!("Failed to read script metadata: {}", e)))?
+                .map_err(|e| {
+                    Error::ValidationError(format!("Failed to read script metadata: {}", e))
+                })?
                 .permissions();
             perms.set_mode(0o755);
-            fs::set_permissions(&inject_path, perms)
-                .map_err(|e| Error::ValidationError(format!("Failed to set script permissions: {}", e)))?;
+            fs::set_permissions(&inject_path, perms).map_err(|e| {
+                Error::ValidationError(format!("Failed to set script permissions: {}", e))
+            })?;
         }
     }
 
@@ -210,11 +239,12 @@ fn print_dry_run_preview(preview: &PreviewData) {
 
     // Size impact
     let reduction_pct = if preview.total_lines > 0 {
-        ((preview.total_lines - preview.core_lines_after) as f64 / preview.total_lines as f64 * 100.0) as usize
+        ((preview.total_lines - preview.core_lines_after) as f64 / preview.total_lines as f64
+            * 100.0) as usize
     } else {
         0
     };
-    println!("{}","Size impact:".bold());
+    println!("{}", "Size impact:".bold());
     println!("  Before: {} lines", preview.total_lines);
     let reduction_color = if reduction_pct >= 30 {
         format!("{}% reduction", reduction_pct).green()
@@ -223,43 +253,78 @@ fn print_dry_run_preview(preview: &PreviewData) {
     } else {
         format!("{}% reduction", reduction_pct).normal()
     };
-    println!("  After: {} lines ({})\n", preview.core_lines_after, reduction_color);
+    println!(
+        "  After: {} lines ({})\n",
+        preview.core_lines_after, reduction_color
+    );
 
     // Sections to extract
-    println!("{} ({}):", "Sections to extract".bold(), preview.sections.len());
+    println!(
+        "{} ({}):",
+        "Sections to extract".bold(),
+        preview.sections.len()
+    );
     for section in &preview.sections {
         let timing_tag = match section.timing {
             SectionTiming::Invocation => "[invocation]".blue(),
             SectionTiming::Runtime => "[runtime]".magenta(),
             SectionTiming::Unknown => "[unknown]".dimmed(),
         };
-        println!("  {} {} (lines {}-{}) → references/{}",
-            timing_tag, section.name, section.line_range.0, section.line_range.1, section.target_file);
+        println!(
+            "  {} {} (lines {}-{}) → references/{}",
+            timing_tag,
+            section.name,
+            section.line_range.0,
+            section.line_range.1,
+            section.target_file
+        );
     }
     println!();
 
     // Breadcrumbs
     if !preview.breadcrumbs.is_empty() {
-        println!("{} ({}):", "Breadcrumbs to create".bold(), preview.breadcrumbs.len());
+        println!(
+            "{} ({}):",
+            "Breadcrumbs to create".bold(),
+            preview.breadcrumbs.len()
+        );
         for breadcrumb in &preview.breadcrumbs {
-            let condition_text = breadcrumb.condition.as_ref()
+            let condition_text = breadcrumb
+                .condition
+                .as_ref()
                 .map(|c| format!(" {}", c))
                 .unwrap_or_default();
-            println!("  ## {} — {}",
+            println!(
+                "  ## {} — {}",
                 breadcrumb.section_name,
-                format!("[See references/{}{}]", breadcrumb.target_file, condition_text).dimmed());
+                format!(
+                    "[See references/{}{}]",
+                    breadcrumb.target_file, condition_text
+                )
+                .dimmed()
+            );
         }
         println!();
     }
 
     // Reference files
-    println!("{} ({}):", "Reference files to create".bold(), preview.reference_files.len());
+    println!(
+        "{} ({}):",
+        "Reference files to create".bold(),
+        preview.reference_files.len()
+    );
     for ref_file in &preview.reference_files {
-        println!("  references/{} ({} lines)", ref_file.filename, ref_file.line_count);
+        println!(
+            "  references/{} ({} lines)",
+            ref_file.filename, ref_file.line_count
+        );
     }
     println!();
 
-    println!("{}", "To apply changes, run without --dry-run flag.".yellow());
+    println!(
+        "{}",
+        "To apply changes, run without --dry-run flag.".yellow()
+    );
 }
 
 #[cfg(test)]
@@ -282,7 +347,7 @@ mod tests {
         let options = DecomposeOptions {
             dry_run: true,
             interactive: None,
-            provider: None,
+            provider: Some("none".to_string()),
             ..Default::default()
         };
 
@@ -303,12 +368,16 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
-        writeln!(file, "---\nname: test-skill\ndescription: test\n---\n\nContent").unwrap();
+        writeln!(
+            file,
+            "---\nname: test-skill\ndescription: test\n---\n\nContent"
+        )
+        .unwrap();
 
         let options = DecomposeOptions {
             dry_run: true,
             interactive: None,
-            provider: None,
+            provider: Some("none".to_string()),
             ..Default::default()
         };
 
@@ -327,7 +396,8 @@ mod tests {
         let mut file = fs::File::create(&skill_path).unwrap();
 
         // Create content with a section that should be split
-        let mut content = String::from("---\nname: test-skill\ndescription: test\nargument-hint: test\n---\n\n");
+        let mut content =
+            String::from("---\nname: test-skill\ndescription: test\nargument-hint: test\n---\n\n");
         content.push_str("## Reference Section\n\n");
         for i in 0..60 {
             content.push_str(&format!("Line {}\n", i));
@@ -337,7 +407,7 @@ mod tests {
         let options = DecomposeOptions {
             dry_run: false,
             interactive: None,
-            provider: None,
+            provider: Some("none".to_string()),
             ..Default::default()
         };
 
@@ -363,7 +433,8 @@ mod tests {
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
 
-        let mut content = String::from("---\nname: test-skill\ndescription: test\nargument-hint: test\n---\n\n");
+        let mut content =
+            String::from("---\nname: test-skill\ndescription: test\nargument-hint: test\n---\n\n");
         content.push_str("## Implementation Steps\n\n");
         for i in 0..60 {
             content.push_str(&format!("Step {}\n", i));
@@ -373,7 +444,7 @@ mod tests {
         let options = DecomposeOptions {
             dry_run: false,
             interactive: None,
-            provider: None,
+            provider: Some("none".to_string()),
             ..Default::default()
         };
 
@@ -404,7 +475,8 @@ mod tests {
         let skill_path = temp_dir.path().join("SKILL.md");
         let mut file = fs::File::create(&skill_path).unwrap();
 
-        let mut content = String::from("---\nname: test-skill\ndescription: test\nargument-hint: test\n---\n\n");
+        let mut content =
+            String::from("---\nname: test-skill\ndescription: test\nargument-hint: test\n---\n\n");
         content.push_str("## Reference Section\n\n");
         for i in 0..60 {
             content.push_str(&format!("Line {}\n", i));
@@ -414,7 +486,7 @@ mod tests {
         let options = DecomposeOptions {
             dry_run: false,
             interactive: None,
-            provider: None,
+            provider: Some("none".to_string()),
             ..Default::default()
         };
 
@@ -436,7 +508,7 @@ mod tests {
         let options = DecomposeOptions {
             dry_run: false,
             interactive: None,
-            provider: None,
+            provider: Some("none".to_string()),
             ..Default::default()
         };
 
