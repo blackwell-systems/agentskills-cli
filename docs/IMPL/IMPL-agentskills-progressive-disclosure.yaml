@@ -1065,73 +1065,112 @@ pre_mortem:
             No overlap. Agent E modifies analyzer.rs imports and BloatAnalysis struct.
             Agent F modifies splitter.rs split_content function. Clear separation.
 critic_report:
-    verdict: PASS
+    verdict: ISSUES
     agent_reviews:
         A:
             agent_id: A
-            verdict: PASS
+            verdict: ISSUES
+            issues:
+                - check: file_existence
+                  severity: error
+                  description: src/upgrade/pattern_detector.rs is listed as action:new but an equivalent already exists at src/decompose/pattern_detector.rs. The src/upgrade/ module does not exist.
+                  file: src/upgrade/pattern_detector.rs
         B:
             agent_id: B
-            verdict: PASS
+            verdict: ISSUES
             issues:
-                - check: import_chains
-                  severity: warning
-                  description: Agent B brief specifies anthropic-sdk = "0.1.5" with IMPORTANT warning to verify API. Crates.io verification confirms package exists at correct version. However brief lines 323-327 require verification of Client type, claude-3-haiku model support, and Message API structure before implementation. This is advisory per brief instructions.
-                  file: Cargo.toml
-                  symbol: anthropic-sdk
-        C:
-            agent_id: C
-            verdict: PASS
-            issues:
+                - check: file_existence
+                  severity: error
+                  description: src/upgrade/semantic_analyzer.rs is listed as action:new but an equivalent already exists at src/decompose/semantic_analyzer.rs. The src/upgrade/ module does not exist.
+                  file: src/upgrade/semantic_analyzer.rs
                 - check: symbol_accuracy
                   severity: error
-                  description: 'Agent C brief lines 435-448 state: Add interactive field to EXISTING UpgradeOptions struct. The struct already exists with dry_run and with_agent_references. You must ADD the interactive field as the third field. Agent H (Wave 4) depends on this field existing. Verified models.rs:91-94 shows struct with ONLY 2 fields (dry_run, with_agent_references). Agent C MUST add interactive: bool or Agent H fails at line 850 constructing UpgradeOptions { interactive: cmd.interactive }.'
+                  description: Brief instructs adding anthropic-sdk and tokio to Cargo.toml but both already exist (anthropic-sdk = 0.1.5, tokio = 1.0 full). No addition needed.
+                  file: Cargo.toml
+                  symbol: anthropic-sdk
+                - check: symbol_accuracy
+                  severity: error
+                  description: Brief instructs adding Error::ApiError(String) variant to src/error.rs but it already exists in the codebase.
+                  file: src/error.rs
+                  symbol: Error::ApiError
+        C:
+            agent_id: C
+            verdict: ISSUES
+            issues:
+                - check: file_existence
+                  severity: error
+                  description: src/upgrade/routing_graph.rs is listed as action:new but an equivalent already exists at src/decompose/routing_graph.rs. The src/upgrade/ module does not exist.
+                  file: src/upgrade/routing_graph.rs
+                - check: symbol_accuracy
+                  severity: error
+                  description: Brief instructs adding RoutingNode and RoutingGraph structs to src/models.rs but both structs already exist there (lines 90-102).
                   file: src/models.rs
-                  symbol: UpgradeOptions.interactive
+                  symbol: RoutingNode
         D:
             agent_id: D
-            verdict: PASS
+            verdict: ISSUES
+            issues:
+                - check: file_existence
+                  severity: error
+                  description: src/upgrade/frontmatter_gen.rs is listed as action:new but an equivalent already exists at src/decompose/frontmatter_gen.rs. The src/upgrade/ module does not exist.
+                  file: src/upgrade/frontmatter_gen.rs
         E:
             agent_id: E
-            verdict: PASS
+            verdict: ISSUES
             issues:
-                - check: caller_exhaustiveness
+                - check: file_existence
                   severity: error
-                  description: 'Agent E modifies BloatAnalysis struct (lines 609-618) adding subcommands and agent_types fields. Current struct has 4 fields. Grep shows 5 construction sites requiring updates: (1) analyzer.rs:122 production code, (2-5) splitter.rs test constructions at lines 194, 226, 253, 283. Brief correctly instructs exhaustive grep-based search at lines 619-625. Must update ALL sites with subcommands: vec![], agent_types: vec![] or compilation fails.'
+                  description: src/upgrade/analyzer.rs is listed as action:modify but does not exist. The actual file is src/decompose/analyzer.rs.
+                  file: src/upgrade/analyzer.rs
+                - check: file_existence
+                  severity: error
+                  description: src/upgrade/mod.rs is listed as action:modify but does not exist. The actual file is src/decompose/mod.rs.
+                  file: src/upgrade/mod.rs
+                - check: symbol_accuracy
+                  severity: error
+                  description: Brief instructs adding subcommands and agent_types fields to BloatAnalysis struct but both fields already exist in src/decompose/analyzer.rs (lines 13-15). No modification needed.
                   file: src/upgrade/analyzer.rs
                   symbol: BloatAnalysis
                 - check: symbol_accuracy
                   severity: error
-                  description: 'Agent E brief lines 629-641 adds 4 module exports to mod.rs: pattern_detector, semantic_analyzer, routing_graph, frontmatter_gen. These files are created by Wave 1 but briefs for Agents A/B/C/D explicitly state they do NOT modify mod.rs. Verified mod.rs:5-7 shows ONLY analyzer/generator/splitter. Agent E adds exports in Wave 2 when all files exist. However Agent F (Wave 3) imports these modules at lines 703-707 AFTER exports should exist. Wave number mismatch: E is Wave 2, F is Wave 3 - imports should work but briefs reference wrong wave numbers.'
+                  description: Brief instructs adding pub mod pattern_detector; and pub use pattern_detector::{...} to mod.rs but src/decompose/mod.rs already declares pattern_detector and re-exports extract_subcommands/extract_agent_types (lines 20 and 30).
                   file: src/upgrade/mod.rs
                   symbol: pattern_detector
         F:
             agent_id: F
-            verdict: PASS
-            issues:
-                - check: symbol_accuracy
-                  severity: error
-                  description: 'Agent F brief lines 703-707 imports crate::upgrade::semantic_analyzer, routing_graph, frontmatter_gen. Verified mod.rs shows these modules NOT exported. Wave 1 agent briefs (A/B/C/D) state: Agent E (Wave 2) adds module exports after Wave 1 merge. Agent F executes in Wave 3 AFTER Agent E Wave 2 exports. However file_ownership shows Agent E in Wave 2, Agent F in Wave 3. Import chain should work but execution order depends on merge-before-next-wave. If Wave 2 not merged before Wave 3 starts, imports fail.'
-                  file: src/upgrade/splitter.rs
-                  symbol: semantic_analyzer
-        G:
-            agent_id: G
-            verdict: PASS
+            verdict: ISSUES
             issues:
                 - check: file_existence
-                  severity: warning
-                  description: Agent G hardcodes path /Users/dayna.blackwell/code/scout-and-wave/implementations/claude-code/prompts/scripts/inject-agent-context. Bash verification confirms file exists and is executable. However absolute path is machine-specific. Pre-mortem lines 928-933 acknowledges this as acceptable for same-repo ecosystem. Advisory only.
-                  file: src/upgrade/generator.rs
-        H:
-            agent_id: H
-            verdict: PASS
-            issues:
+                  severity: error
+                  description: src/upgrade/splitter.rs is listed as action:modify but does not exist. The actual file is src/decompose/splitter.rs.
+                  file: src/upgrade/splitter.rs
                 - check: symbol_accuracy
                   severity: error
-                  description: 'Agent H brief lines 844-858 states: Use the interactive field from UpgradeOptions (already added by Agent C in Wave 1). Constructs UpgradeOptions at line 852 with interactive: cmd.interactive. Verified models.rs:91-94 shows UpgradeOptions has NO interactive field. Only dry_run and with_agent_references exist. Agent C brief claims to add this field but verification shows it missing. Dependency failure: Agent H assumes field exists but Agent C must add it first.'
+                  description: 'Brief describes changing split_content signature to take api_key: Option<String>, but the actual src/decompose/splitter.rs already has a more advanced async signature: split_content(skill_path, analysis, analyzer: Option<Box<dyn SemanticAnalyzer>>, routing: Option<&RoutingOutput>). The proposed signature change is incompatible with the existing implementation.'
+                  file: src/upgrade/splitter.rs
+                  symbol: split_content
+        G:
+            agent_id: G
+            verdict: ISSUES
+            issues:
+                - check: file_existence
+                  severity: error
+                  description: src/upgrade/generator.rs is listed as action:modify but does not exist. The actual file is src/decompose/generator.rs.
+                  file: src/upgrade/generator.rs
+                - check: symbol_accuracy
+                  severity: error
+                  description: Brief instructs replacing generate_inject_script (lines 5-51) with a bundle_saw_script function, but src/decompose/generator.rs already implements this exact pattern via bundle_inject_script(). The generate_inject_script function already delegates to bundle_inject_script() which reads the SAW inject-agent-context script from the same path described in the brief.
+                  file: src/upgrade/generator.rs
+                  symbol: generate_inject_script
+        H:
+            agent_id: H
+            verdict: ISSUES
+            issues:
+                - check: file_existence
+                  severity: error
+                  description: src/commands/upgrade.rs is listed as action:modify but does not exist. The actual upgrade command file is src/commands/decompose.rs with DecomposeCommand and DecomposeOptions structs (not UpgradeCommand/UpgradeOptions).
                   file: src/commands/upgrade.rs
-                  symbol: UpgradeOptions.interactive
-    summary: 'Critical wave coordination failures prevent execution. Five blocking errors: (1) Agent C must add UpgradeOptions.interactive field required by Agent H, (2) Wave 1 creates 4 modules but no agent exports them in mod.rs causing Agent F imports to fail, (3) Agent E BloatAnalysis modification breaks 5 construction sites across analyzer.rs and splitter.rs, (4) Agent F Wave 3 imports modules before Agent E Wave 2 exports them (wave ordering issue), (5) Agent H depends on field Agent C never adds. Core architectural gap: mod.rs ownership missing leaves module exports uncoordinated across waves.'
-    reviewed_at: "2026-03-27T05:43:38Z"
-    issue_count: 8
+    summary: 'The IMPL doc is written against a ''src/upgrade/'' module that does not exist in the codebase. The actual implementation uses ''src/decompose/''. This pervasive path error affects every agent: all Wave 1 ''new'' files have equivalents already implemented in src/decompose/ (pattern_detector.rs, semantic_analyzer.rs, routing_graph.rs, frontmatter_gen.rs), all Wave 2 ''modify'' files reference non-existent paths (src/upgrade/analyzer.rs, splitter.rs, generator.rs, mod.rs), and Agent H''s src/commands/upgrade.rs does not exist (actual: src/commands/decompose.rs). Additionally, several things the IMPL asks agents to add already exist: RoutingNode/RoutingGraph structs in models.rs, subcommands/agent_types fields in BloatAnalysis, anthropic-sdk in Cargo.toml, Error::ApiError variant in error.rs, and the SAW script bundling in generator.rs. The IMPL doc needs to be rescoped to work with the existing src/decompose/ module structure.'
+    reviewed_at: "2026-04-13T21:18:51Z"
+    issue_count: 18
 state: SCOUT_PENDING
