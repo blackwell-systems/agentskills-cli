@@ -233,7 +233,8 @@ Content
         let metadata = SkillMetadata::from_str(content).unwrap();
         // agent-references is now a vendor extension in unknown_fields
         assert!(metadata.unknown_fields.contains_key("agent-references"));
-        if let Some(serde_yaml::Value::Sequence(refs)) = metadata.unknown_fields.get("agent-references")
+        if let Some(serde_yaml::Value::Sequence(refs)) =
+            metadata.unknown_fields.get("agent-references")
         {
             assert_eq!(refs.len(), 2);
         } else {
@@ -453,10 +454,10 @@ Content
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum RoutingStyle {
     #[default]
-    Smart,    // Auto-select based on subcommand count (inline if <4, table if ≥4)
-    Inline,   // Always use inline breadcrumbs
-    Table,    // Always use routing table
-    None,     // No routing generation
+    Smart, // Auto-select based on subcommand count (inline if <4, table if ≥4)
+    Inline, // Always use inline breadcrumbs
+    Table,  // Always use routing table
+    None,   // No routing generation
 }
 
 #[derive(Debug, Clone)]
@@ -470,7 +471,7 @@ pub struct RoutingDetectionResult {
 #[derive(Debug, Clone)]
 pub struct TimingSection {
     pub name: String,
-    pub timing: SectionTiming,  // Invocation or Runtime (existing enum)
+    pub timing: SectionTiming, // Invocation or Runtime (existing enum)
     pub trigger_pattern: Option<String>,
 }
 

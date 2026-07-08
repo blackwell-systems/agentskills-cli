@@ -1,8 +1,8 @@
+use crate::decompose::pattern_detector::{extract_agent_types, extract_subcommands};
 use crate::error::Error;
 use crate::models::{
-    RoutingDetectionResult, RoutingStyle, SectionTiming, TimingSection, DecomposeOptions,
+    DecomposeOptions, RoutingDetectionResult, RoutingStyle, SectionTiming, TimingSection,
 };
-use crate::decompose::pattern_detector::{extract_agent_types, extract_subcommands};
 use std::fs;
 use std::path::Path;
 

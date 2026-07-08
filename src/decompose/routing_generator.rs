@@ -34,13 +34,12 @@ pub fn generate_routing(
     };
 
     // Generate inline breadcrumbs if not table style and not None
-    let inline_breadcrumbs = if resolved_style != RoutingStyle::Table
-        && resolved_style != RoutingStyle::None
-    {
-        generate_inline_breadcrumbs(detection)
-    } else {
-        vec![]
-    };
+    let inline_breadcrumbs =
+        if resolved_style != RoutingStyle::Table && resolved_style != RoutingStyle::None {
+            generate_inline_breadcrumbs(detection)
+        } else {
+            vec![]
+        };
 
     // Generate back-link headers for reference files
     let back_link_headers = generate_back_link_headers(detection);
@@ -127,10 +126,7 @@ fn generate_back_link_headers(detection: &RoutingDetectionResult) -> HashMap<Str
     // Generate headers for subcommand reference files
     for subcommand in &detection.subcommands {
         let ref_file = format!("references/{}.md", subcommand.to_lowercase());
-        let header = format!(
-            "<!-- Core flow: see SKILL.md section {} -->",
-            subcommand
-        );
+        let header = format!("<!-- Core flow: see SKILL.md section {} -->", subcommand);
         headers.insert(ref_file, header);
     }
 
@@ -140,10 +136,7 @@ fn generate_back_link_headers(detection: &RoutingDetectionResult) -> HashMap<Str
             "references/{}.md",
             section.name.to_lowercase().replace(' ', "-")
         );
-        let header = format!(
-            "<!-- Core flow: see SKILL.md section {} -->",
-            section.name
-        );
+        let header = format!("<!-- Core flow: see SKILL.md section {} -->", section.name);
         headers.insert(ref_file, header);
     }
 
@@ -196,8 +189,14 @@ mod tests {
         // Should only generate breadcrumb for Runtime section
         assert_eq!(breadcrumbs.len(), 1);
         assert_eq!(breadcrumbs[0].section_name, "Error Handling");
-        assert_eq!(breadcrumbs[0].reference_file, "references/error-handling.md");
-        assert_eq!(breadcrumbs[0].condition, Some("when error occurs".to_string()));
+        assert_eq!(
+            breadcrumbs[0].reference_file,
+            "references/error-handling.md"
+        );
+        assert_eq!(
+            breadcrumbs[0].condition,
+            Some("when error occurs".to_string())
+        );
     }
 
     #[test]

@@ -1,7 +1,7 @@
+use crate::decompose::analyzer::BloatAnalysis;
+use crate::decompose::semantic_analyzer::{SectionIntent, SemanticAnalyzer, TriggerTiming};
 use crate::error::Error;
 use crate::models::{RoutingOutput, SectionTiming};
-use crate::decompose::analyzer::BloatAnalysis;
-use crate::decompose::semantic_analyzer::{SemanticAnalyzer, SectionIntent, TriggerTiming};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -31,9 +31,7 @@ fn generate_breadcrumb(section_name: &str, target_file: &str, condition: Option<
     let condition_text = condition
         .map(|c| {
             // Strip leading "if " or "when " to avoid "when if X" or "when when X"
-            let cleaned = c
-                .trim_start_matches("if ")
-                .trim_start_matches("when ");
+            let cleaned = c.trim_start_matches("if ").trim_start_matches("when ");
             format!("when {}", cleaned)
         })
         .unwrap_or_else(|| "when needed".to_string());
@@ -41,10 +39,7 @@ fn generate_breadcrumb(section_name: &str, target_file: &str, condition: Option<
     format!(
         "## {} — [See references/{} {}]\n\n\
         Read `${{SKILL_DIR}}/references/{}` and follow its instructions.\n",
-        section_name,
-        target_file,
-        condition_text,
-        target_file
+        section_name, target_file, condition_text, target_file
     )
 }
 
@@ -87,40 +82,35 @@ pub async fn split_content(
     };
 
     // Step 2: Semantic analysis on ALL sections (if available)
-    let sections_with_intent: Vec<(String, usize, usize, String, SectionIntent)> = if let Some(ref analyzer) = analyzer {
-        let mut result = Vec::new();
-        for (section_name, start_line, end_line) in all_sections {
-            // Skip small sections (< 30 lines) - not worth splitting
-            if end_line - start_line < 30 {
-                continue;
+    let sections_with_intent: Vec<(String, usize, usize, String, SectionIntent)> =
+        if let Some(ref analyzer) = analyzer {
+            let mut result = Vec::new();
+            for (section_name, start_line, end_line) in all_sections {
+                // Skip small sections (< 30 lines) - not worth splitting
+                if end_line - start_line < 30 {
+                    continue;
+                }
+
+                let section_content: String = lines[start_line..end_line].join("\n");
+
+                let intent = analyzer
+                    .analyze_section(&section_name, &section_content)
+                    .await?;
+
+                let target_file = format!(
+                    "{}.md",
+                    section_name
+                        .to_lowercase()
+                        .replace(' ', "-")
+                        .replace(['(', ')', '/', '\\', ':'], "")
+                );
+
+                result.push((section_name, start_line, end_line, target_file, intent));
             }
-
-            let section_content: String = lines[start_line..end_line].join("\n");
-
-            let intent = analyzer
-                .analyze_section(&section_name, &section_content)
-                .await?;
-
-            let target_file = format!(
-                "{}.md",
-                section_name
-                    .to_lowercase()
-                    .replace(' ', "-")
-                    .replace(['(', ')', '/', '\\', ':'], "")
-            );
-
-            result.push((
-                section_name,
-                start_line,
-                end_line,
-                target_file,
-                intent,
-            ));
-        }
-        result
-    } else {
-        Vec::new()
-    };
+            result
+        } else {
+            Vec::new()
+        };
 
     // Step 3: Extract sections to reference files (both invocation and runtime)
     for (section_name, start_line, end_line, target_file, intent) in &sections_with_intent {
@@ -138,7 +128,12 @@ pub async fn split_content(
             .map(|h| format!("{}\n", h))
             .unwrap_or_default();
 
-        let reference_content = format!("{}{}{}", dedup_marker, back_link_header, section_lines.join("\n"));
+        let reference_content = format!(
+            "{}{}{}",
+            dedup_marker,
+            back_link_header,
+            section_lines.join("\n")
+        );
 
         reference_files.insert(target_file.clone(), reference_content);
 
@@ -172,7 +167,8 @@ pub async fn split_content(
                 .map(|&s| s.to_string())
                 .collect();
 
-            let dedup_marker = format!("<!-- injected: references/{} -->\n", suggestion.target_file);
+            let dedup_marker =
+                format!("<!-- injected: references/{} -->\n", suggestion.target_file);
 
             // Add back-link header if routing provides one
             let back_link_header = routing
@@ -180,7 +176,12 @@ pub async fn split_content(
                 .map(|h| format!("{}\n", h))
                 .unwrap_or_default();
 
-            let reference_content = format!("{}{}{}", dedup_marker, back_link_header, section_lines.join("\n"));
+            let reference_content = format!(
+                "{}{}{}",
+                dedup_marker,
+                back_link_header,
+                section_lines.join("\n")
+            );
 
             reference_files.insert(suggestion.target_file.clone(), reference_content);
 
@@ -205,11 +206,19 @@ pub async fn split_content(
 
     // Add semantically analyzed sections
     for (section_name, start_line, end_line, target_file, intent) in &sections_with_intent {
-        let is_runtime = intent.trigger_timing.as_ref()
+        let is_runtime = intent
+            .trigger_timing
+            .as_ref()
             .map(|timing| matches!(timing, TriggerTiming::Runtime))
             .unwrap_or(false);
 
-        sections_to_process.push((*start_line, *end_line, section_name.clone(), target_file.clone(), is_runtime));
+        sections_to_process.push((
+            *start_line,
+            *end_line,
+            section_name.clone(),
+            target_file.clone(),
+            is_runtime,
+        ));
     }
 
     // Add bloat analyzer suggestions not already covered
@@ -235,22 +244,33 @@ pub async fn split_content(
     // Build core with breadcrumbs for runtime sections
     for (start_line, end_line, section_name, target_file, is_runtime) in sections_to_process {
         // Add lines before this section
-        core_lines.extend(lines[current_idx..start_line].iter().map(|&s| s.to_string()));
+        core_lines.extend(
+            lines[current_idx..start_line]
+                .iter()
+                .map(|&s| s.to_string()),
+        );
 
         if is_runtime {
             // Use routing breadcrumbs if available, otherwise fall back to generate_breadcrumb
             let breadcrumb = if let Some(routing_output) = routing {
                 // Find matching inline breadcrumb
-                routing_output.inline_breadcrumbs.iter()
+                routing_output
+                    .inline_breadcrumbs
+                    .iter()
                     .find(|bc| bc.section_name == section_name && bc.reference_file == target_file)
-                    .map(|bc| format!(
-                        "## {} — [See references/{} {}]\n\n\
+                    .map(|bc| {
+                        format!(
+                            "## {} — [See references/{} {}]\n\n\
                         Read `${{SKILL_DIR}}/references/{}` and follow its instructions.\n",
-                        bc.section_name,
-                        bc.reference_file,
-                        bc.condition.as_ref().map(|c| format!("when {}", c)).unwrap_or_else(|| "when needed".to_string()),
-                        bc.reference_file
-                    ))
+                            bc.section_name,
+                            bc.reference_file,
+                            bc.condition
+                                .as_ref()
+                                .map(|c| format!("when {}", c))
+                                .unwrap_or_else(|| "when needed".to_string()),
+                            bc.reference_file
+                        )
+                    })
                     .unwrap_or_else(|| {
                         let condition = sections_with_intent
                             .iter()
@@ -288,7 +308,10 @@ pub async fn split_content(
         .unwrap_or_default();
 
     // Reassemble with preserved frontmatter + routing table + body
-    let core_content = format!("{}{}{}", existing_frontmatter, routing_table_section, body_without_frontmatter);
+    let core_content = format!(
+        "{}{}{}",
+        existing_frontmatter, routing_table_section, body_without_frontmatter
+    );
 
     Ok(SplitResult {
         core_content,
@@ -349,7 +372,9 @@ Content 2
             agent_types: vec![],
         };
 
-        let result = split_content(temp_file.path(), &analysis, None, None).await.unwrap();
+        let result = split_content(temp_file.path(), &analysis, None, None)
+            .await
+            .unwrap();
 
         // Should have one reference file
         assert_eq!(result.reference_files.len(), 1);
@@ -377,7 +402,9 @@ Content here
             agent_types: vec![],
         };
 
-        let result = split_content(temp_file.path(), &analysis, None, None).await.unwrap();
+        let result = split_content(temp_file.path(), &analysis, None, None)
+            .await
+            .unwrap();
 
         // Should NOT add triggers frontmatter (no longer generated)
         assert!(!result.core_content.contains("triggers:"));
@@ -404,7 +431,9 @@ Content here
             agent_types: vec![],
         };
 
-        let result = split_content(temp_file.path(), &analysis, None, None).await.unwrap();
+        let result = split_content(temp_file.path(), &analysis, None, None)
+            .await
+            .unwrap();
 
         // Should preserve name and description exactly as they were
         assert!(result.core_content.contains("name: existing-skill"));
@@ -440,7 +469,9 @@ Content to extract
             agent_types: vec![],
         };
 
-        let result = split_content(temp_file.path(), &analysis, None, None).await.unwrap();
+        let result = split_content(temp_file.path(), &analysis, None, None)
+            .await
+            .unwrap();
 
         // Should preserve original frontmatter unchanged
         assert!(result.core_content.contains("name: test-skill"));
@@ -478,7 +509,9 @@ Content here
             agent_types: vec![],
         };
 
-        let result = split_content(temp_file.path(), &analysis, None, None).await.unwrap();
+        let result = split_content(temp_file.path(), &analysis, None, None)
+            .await
+            .unwrap();
 
         // Should have section metadata
         assert_eq!(result.sections_metadata.len(), 1);

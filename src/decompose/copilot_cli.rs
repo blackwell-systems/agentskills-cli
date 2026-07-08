@@ -1,5 +1,5 @@
+use crate::decompose::semantic_analyzer::{SectionIntent, SemanticAnalyzer};
 use crate::error::Error;
-use crate::decompose::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Command;
@@ -73,9 +73,7 @@ Respond ONLY with valid JSON in this exact format:
             .arg("--allow-all-tools")
             .env_remove("GITHUB_TOKEN") // Remove classic PAT if present
             .output()
-            .map_err(|e| {
-                Error::ValidationError(format!("Failed to execute copilot CLI: {}", e))
-            })?;
+            .map_err(|e| Error::ValidationError(format!("Failed to execute copilot CLI: {}", e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

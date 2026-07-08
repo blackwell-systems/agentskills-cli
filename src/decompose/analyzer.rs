@@ -1,6 +1,6 @@
-use crate::error::Error;
-use crate::models::{ SkillMetadata, DecomposeOptions};
 use crate::decompose::pattern_detector;
+use crate::error::Error;
+use crate::models::{DecomposeOptions, SkillMetadata};
 use regex::Regex;
 use std::fs;
 use std::path::Path;
@@ -25,7 +25,10 @@ pub struct SplitSuggestion {
 }
 
 /// Analyzes SKILL.md for bloat and suggests decomposition
-pub fn analyze_bloat(skill_path: &Path, _options: &DecomposeOptions) -> Result<BloatAnalysis, Error> {
+pub fn analyze_bloat(
+    skill_path: &Path,
+    _options: &DecomposeOptions,
+) -> Result<BloatAnalysis, Error> {
     let content = fs::read_to_string(skill_path)
         .map_err(|e| Error::ValidationError(format!("Failed to read SKILL.md: {}", e)))?;
 
@@ -36,10 +39,8 @@ pub fn analyze_bloat(skill_path: &Path, _options: &DecomposeOptions) -> Result<B
     let metadata = SkillMetadata::from_path(skill_path)?;
 
     // Extract patterns for routing
-    let subcommands = pattern_detector::extract_subcommands(&content)
-        .unwrap_or_else(|_| vec![]);
-    let agent_types = pattern_detector::extract_agent_types(&content)
-        .unwrap_or_else(|_| vec![]);
+    let subcommands = pattern_detector::extract_subcommands(&content).unwrap_or_else(|_| vec![]);
+    let agent_types = pattern_detector::extract_agent_types(&content).unwrap_or_else(|_| vec![]);
 
     // Detect markdown sections using ## headers
     let header_regex = Regex::new(r"^##\s+(.+)$").unwrap();

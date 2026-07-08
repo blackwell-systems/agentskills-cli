@@ -24,7 +24,8 @@ pub fn validate_extensions(metadata: &SkillMetadata, result: &mut ValidationResu
                 // Warn that this is a vendor extension
                 result.add_warning(ValidationError {
                     error_type: "vendor_extension".to_string(),
-                    message: "Field 'triggers' is a vendor extension (not in Agent Skills spec)".to_string(),
+                    message: "Field 'triggers' is a vendor extension (not in Agent Skills spec)"
+                        .to_string(),
                     file: Some(PathBuf::from("SKILL.md")),
                     line: None,
                     severity: Severity::Warning,
@@ -37,7 +38,10 @@ pub fn validate_extensions(metadata: &SkillMetadata, result: &mut ValidationResu
                             if s.trim().is_empty() {
                                 result.add_error(ValidationError {
                                     error_type: "invalid_trigger_format".to_string(),
-                                    message: format!("Trigger at index {} is empty or whitespace-only", i),
+                                    message: format!(
+                                        "Trigger at index {} is empty or whitespace-only",
+                                        i
+                                    ),
                                     file: Some(PathBuf::from("SKILL.md")),
                                     line: None,
                                     severity: Severity::Error,
@@ -51,7 +55,9 @@ pub fn validate_extensions(metadata: &SkillMetadata, result: &mut ValidationResu
             "agent-references" => {
                 result.add_warning(ValidationError {
                     error_type: "vendor_extension".to_string(),
-                    message: "Field 'agent-references' is a vendor extension (not in Agent Skills spec)".to_string(),
+                    message:
+                        "Field 'agent-references' is a vendor extension (not in Agent Skills spec)"
+                            .to_string(),
                     file: Some(PathBuf::from("SKILL.md")),
                     line: None,
                     severity: Severity::Warning,
@@ -63,7 +69,10 @@ pub fn validate_extensions(metadata: &SkillMetadata, result: &mut ValidationResu
                             if s.trim().is_empty() {
                                 result.add_error(ValidationError {
                                     error_type: "invalid_agent_reference_format".to_string(),
-                                    message: format!("Agent reference at index {} is empty or whitespace-only", i),
+                                    message: format!(
+                                        "Agent reference at index {} is empty or whitespace-only",
+                                        i
+                                    ),
                                     file: Some(PathBuf::from("SKILL.md")),
                                     line: None,
                                     severity: Severity::Error,
@@ -76,7 +85,8 @@ pub fn validate_extensions(metadata: &SkillMetadata, result: &mut ValidationResu
             "model" => {
                 result.add_warning(ValidationError {
                     error_type: "vendor_extension".to_string(),
-                    message: "Field 'model' is a vendor extension (not in Agent Skills spec)".to_string(),
+                    message: "Field 'model' is a vendor extension (not in Agent Skills spec)"
+                        .to_string(),
                     file: Some(PathBuf::from("SKILL.md")),
                     line: None,
                     severity: Severity::Warning,
@@ -97,7 +107,9 @@ pub fn validate_extensions(metadata: &SkillMetadata, result: &mut ValidationResu
             "model-context" => {
                 result.add_warning(ValidationError {
                     error_type: "vendor_extension".to_string(),
-                    message: "Field 'model-context' is a vendor extension (not in Agent Skills spec)".to_string(),
+                    message:
+                        "Field 'model-context' is a vendor extension (not in Agent Skills spec)"
+                            .to_string(),
                     file: Some(PathBuf::from("SKILL.md")),
                     line: None,
                     severity: Severity::Warning,
@@ -107,7 +119,8 @@ pub fn validate_extensions(metadata: &SkillMetadata, result: &mut ValidationResu
                     if s.trim().is_empty() {
                         result.add_error(ValidationError {
                             error_type: "invalid_model_context_value".to_string(),
-                            message: "Field 'model-context' must be non-empty if present".to_string(),
+                            message: "Field 'model-context' must be non-empty if present"
+                                .to_string(),
                             file: Some(PathBuf::from("SKILL.md")),
                             line: None,
                             severity: Severity::Error,
@@ -247,9 +260,10 @@ mod tests {
     #[test]
     fn test_empty_model() {
         let mut metadata = create_metadata();
-        metadata
-            .unknown_fields
-            .insert("model".to_string(), serde_yaml::Value::String("".to_string()));
+        metadata.unknown_fields.insert(
+            "model".to_string(),
+            serde_yaml::Value::String("".to_string()),
+        );
 
         let mut result = ValidationResult::new();
         validate_extensions(&metadata, &mut result);

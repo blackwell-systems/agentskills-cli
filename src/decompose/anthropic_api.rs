@@ -1,5 +1,5 @@
+use crate::decompose::semantic_analyzer::{SectionIntent, SemanticAnalyzer};
 use crate::error::Error;
-use crate::decompose::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
 use anthropic_sdk::Client;
 use async_trait::async_trait;
 use serde_json::json;

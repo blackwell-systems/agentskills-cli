@@ -194,7 +194,12 @@ mod tests {
         assert!(result.contains("- agent-type: scout"));
         assert!(result.contains("- agent-type: wave-agent"));
         // Both should point to the same reference file
-        assert_eq!(result.matches("inject: references/shared-details.md").count(), 2);
+        assert_eq!(
+            result
+                .matches("inject: references/shared-details.md")
+                .count(),
+            2
+        );
     }
 
     #[test]
@@ -233,7 +238,10 @@ mod tests {
         assert!(result.contains("- match: \"--add-wave\""));
         assert!(result.contains("- match: \"--redirect-agent\""));
         // All should point to the same reference file
-        assert_eq!(result.matches("inject: references/amend-flow.md").count(), 3);
+        assert_eq!(
+            result.matches("inject: references/amend-flow.md").count(),
+            3
+        );
     }
 
     #[test]

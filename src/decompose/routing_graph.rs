@@ -1,5 +1,5 @@
-use crate::models::{RoutingGraph, RoutingNode};
 use crate::decompose::semantic_analyzer::{SectionIntent, TriggerTiming};
+use crate::models::{RoutingGraph, RoutingNode};
 
 /// Build routing graph from pattern detector output and semantic analysis results
 ///
@@ -26,7 +26,11 @@ pub fn build(
         }
 
         let trigger_patterns = if intent.is_command_specific {
-            vec![format!("^/{} {}", skill_name, intent.command.as_ref().unwrap())]
+            vec![format!(
+                "^/{} {}",
+                skill_name,
+                intent.command.as_ref().unwrap()
+            )]
         } else {
             vec![]
         };

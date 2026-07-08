@@ -1,5 +1,5 @@
+use crate::decompose::semantic_analyzer::{SectionIntent, SemanticAnalyzer};
 use crate::error::Error;
-use crate::decompose::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Command;
@@ -83,7 +83,8 @@ Respond ONLY with valid JSON in this exact format:
 
         // Parse stdout as JSON (strip markdown code fences if present)
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let json_str = stdout.trim()
+        let json_str = stdout
+            .trim()
             .trim_start_matches("```json")
             .trim_start_matches("```")
             .trim_end_matches("```")
@@ -107,10 +108,7 @@ mod tests {
     #[test]
     fn test_anthropic_cli_new() {
         let analyzer = AnthropicCli::new(PathBuf::from("/usr/local/bin/claude"));
-        assert_eq!(
-            analyzer.claude_path,
-            PathBuf::from("/usr/local/bin/claude")
-        );
+        assert_eq!(analyzer.claude_path, PathBuf::from("/usr/local/bin/claude"));
     }
 
     #[tokio::test]
@@ -141,10 +139,7 @@ mod tests {
     fn test_anthropic_cli_invalid_binary() {
         let analyzer = AnthropicCli::new(PathBuf::from("/nonexistent/claude"));
         let runtime = tokio::runtime::Runtime::new().unwrap();
-        let result = runtime.block_on(analyzer.analyze_section(
-            "Test",
-            "Test content",
-        ));
+        let result = runtime.block_on(analyzer.analyze_section("Test", "Test content"));
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();

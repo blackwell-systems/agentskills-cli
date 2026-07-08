@@ -1,5 +1,5 @@
+use crate::decompose::semantic_analyzer::{SectionIntent, SemanticAnalyzer};
 use crate::error::Error;
-use crate::decompose::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Command;
@@ -104,10 +104,7 @@ mod tests {
     #[test]
     fn test_gemini_cli_new() {
         let analyzer = GeminiCli::new(PathBuf::from("/usr/local/bin/gemini"));
-        assert_eq!(
-            analyzer.gemini_path,
-            PathBuf::from("/usr/local/bin/gemini")
-        );
+        assert_eq!(analyzer.gemini_path, PathBuf::from("/usr/local/bin/gemini"));
     }
 
     #[tokio::test]

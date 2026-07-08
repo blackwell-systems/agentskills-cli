@@ -1,9 +1,9 @@
+use crate::decompose::semantic_analyzer::{SectionIntent, SemanticAnalyzer};
 use crate::error::Error;
-use crate::decompose::semantic_analyzer::{SemanticAnalyzer, SectionIntent};
 use async_trait::async_trait;
 use gemini_client_rs::{
-    GeminiClient,
     types::{Content, ContentPart, GenerateContentRequest, Role},
+    GeminiClient,
 };
 
 /// API-based Gemini analyzer using Google Gemini API
@@ -93,11 +93,9 @@ Respond ONLY with valid JSON in this exact format:
             .first()
             .and_then(|c| c.content.as_ref())
             .and_then(|content| content.parts.first())
-            .and_then(|p| {
-                match &p.data {
-                    gemini_client_rs::types::ContentData::Text(text) => Some(text.as_str()),
-                    _ => None,
-                }
+            .and_then(|p| match &p.data {
+                gemini_client_rs::types::ContentData::Text(text) => Some(text.as_str()),
+                _ => None,
             })
             .ok_or_else(|| Error::ApiError("Gemini response missing text content".to_string()))?;
 

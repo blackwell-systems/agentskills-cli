@@ -84,12 +84,11 @@ pub fn extract_agent_types(content: &str) -> Result<Vec<String>, Error> {
             // Handle pipe-delimited string
             serde_yaml::Value::String(s) => s.clone(),
             // Handle array of strings
-            serde_yaml::Value::Sequence(seq) => {
-                seq.iter()
-                    .filter_map(|v| v.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" | ")
-            }
+            serde_yaml::Value::Sequence(seq) => seq
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(" | "),
             _ => {
                 return Err(Error::ParseError(
                     "allowed-tools must be string or array".to_string(),
@@ -172,7 +171,10 @@ Content here.
 
         let result = extract_skill_name(content);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Missing name field"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Missing name field"));
     }
 
     #[test]

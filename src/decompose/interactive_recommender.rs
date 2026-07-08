@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::models::{RoutingDetectionResult, RoutingStyle, SectionTiming, DecomposeOptions};
+use crate::models::{DecomposeOptions, RoutingDetectionResult, RoutingStyle, SectionTiming};
 use std::io::{self, Write};
 
 /// Displays routing detection results and recommendations, gets user confirmation
@@ -61,20 +61,23 @@ pub fn show_interactive_preview(
 
     // Prompt user for confirmation or custom selection
     eprint!("\nApply recommended routing? [y/N/custom]: ");
-    io::stderr().flush().map_err(|e| {
-        Error::ValidationError(format!("Failed to flush stderr: {}", e))
-    })?;
+    io::stderr()
+        .flush()
+        .map_err(|e| Error::ValidationError(format!("Failed to flush stderr: {}", e)))?;
 
     let mut input = String::new();
-    io::stdin().read_line(&mut input).map_err(|e| {
-        Error::ValidationError(format!("Failed to read user input: {}", e))
-    })?;
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(|e| Error::ValidationError(format!("Failed to read user input: {}", e)))?;
 
     let choice = input.trim().to_lowercase();
 
     match choice.as_str() {
         "y" | "yes" => {
-            eprintln!("Applying recommended routing style: {:?}", detection.recommended_style);
+            eprintln!(
+                "Applying recommended routing style: {:?}",
+                detection.recommended_style
+            );
             Ok(Some(detection.recommended_style.clone()))
         }
         "n" | "no" | "" => {
@@ -89,9 +92,9 @@ pub fn show_interactive_preview(
             eprintln!("  3. Table (routing table)");
             eprintln!("  4. None (no routing)");
             eprint!("Enter choice [1-4]: ");
-            io::stderr().flush().map_err(|e| {
-                Error::ValidationError(format!("Failed to flush stderr: {}", e))
-            })?;
+            io::stderr()
+                .flush()
+                .map_err(|e| Error::ValidationError(format!("Failed to flush stderr: {}", e)))?;
 
             let mut custom_input = String::new();
             io::stdin().read_line(&mut custom_input).map_err(|e| {
@@ -127,8 +130,14 @@ pub fn format_detection_summary(detection: &RoutingDetectionResult) -> String {
     let mut summary = String::new();
     summary.push_str(&format!("Subcommands: {}\n", detection.subcommands.len()));
     summary.push_str(&format!("Agent types: {}\n", detection.agent_types.len()));
-    summary.push_str(&format!("Timing sections: {}\n", detection.timing_sections.len()));
-    summary.push_str(&format!("Recommended style: {:?}\n", detection.recommended_style));
+    summary.push_str(&format!(
+        "Timing sections: {}\n",
+        detection.timing_sections.len()
+    ));
+    summary.push_str(&format!(
+        "Recommended style: {:?}\n",
+        detection.recommended_style
+    ));
     summary
 }
 
@@ -163,13 +172,11 @@ mod tests {
         let detection = RoutingDetectionResult {
             subcommands: vec!["cmd1".to_string(), "cmd2".to_string()],
             agent_types: vec!["scout".to_string(), "wave".to_string()],
-            timing_sections: vec![
-                TimingSection {
-                    name: "Setup".to_string(),
-                    timing: SectionTiming::Invocation,
-                    trigger_pattern: None,
-                },
-            ],
+            timing_sections: vec![TimingSection {
+                name: "Setup".to_string(),
+                timing: SectionTiming::Invocation,
+                trigger_pattern: None,
+            }],
             recommended_style: RoutingStyle::Inline,
         };
 
